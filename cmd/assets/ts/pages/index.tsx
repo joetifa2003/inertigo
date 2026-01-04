@@ -1,4 +1,4 @@
-import { Link } from "@inertiajs/react";
+import { Deferred, Link } from "@inertiajs/react";
 import { useState } from "react";
 
 export default function Index(props) {
@@ -11,6 +11,9 @@ export default function Index(props) {
       <button onClick={() => setCount(count + 1)}>Increment</button>
       <br />
       <Link href="/about">Go To About</Link>
+      <Deferred data="lazyMessage" fallback={<div>Loading...</div>}>
+        <p>Lazy Message: {props.lazyMessage}</p>
+      </Deferred>
     </div>
   );
 }

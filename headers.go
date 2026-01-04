@@ -1,0 +1,37 @@
+package inertia
+
+import (
+	"net/http"
+	"strings"
+)
+
+type inertiaHeaders struct {
+	Component       string
+	TotalVersion    string
+	PartialData     []string
+	PartialExcept   []string
+	ExceptOnceProps []string
+	IsPartial       bool
+	IsInertia       bool
+}
+
+func parseInertiaHeaders(r *http.Request, component string) *inertiaHeaders {
+	headers := &inertiaHeaders{
+		Component: r.Header.Get("X-Inertia-Partial-Component"),
+		IsInertia: r.Header.Get(XInertia) == "true",
+	}
+
+	headers.IsPartial = headers.IsInertia && headers.Component == component
+
+	if partialData := r.Header.Get("X-Inertia-Partial-Data"); partialData != "" {
+		headers.PartialData = strings.Split(partialData, ",")
+	}
+	if partialExcept := r.Header.Get("X-Inertia-Partial-Except"); partialExcept != "" {
+		headers.PartialExcept = strings.Split(partialExcept, ",")
+	}
+	if exceptOnce := r.Header.Get("X-Inertia-Except-Once-Props"); exceptOnce != "" {
+		headers.ExceptOnceProps = strings.Split(exceptOnce, ",")
+	}
+
+	return headers
+}

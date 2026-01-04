@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	inertia "go-ssr-experiment"
 )
@@ -40,6 +41,10 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		err = i.Render(w, r, "index", inertia.Props{
 			"title": "Hello, world!",
+			"lazyMessage": inertia.Deferred(func(ctx context.Context) (any, error) {
+				time.Sleep(1 * time.Second)
+				return "This message is lazy loaded", nil
+			}),
 		})
 		if err != nil {
 			slog.Error(err.Error())
@@ -57,9 +62,9 @@ func main() {
 		}
 	})
 
-	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8000"))
+	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8001"))
 
-	http.ListenAndServe(":8000", mux)
+	http.ListenAndServe(":8001", mux)
 }
 
 func must(err error) {

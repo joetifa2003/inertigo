@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/olivere/vite"
+
+	"go-ssr-experiment/internal/pool"
 )
 
 type Inertia struct {
@@ -200,29 +202,6 @@ type RootHtmlView struct {
 	InertiaBody template.HTML
 }
 
-type Props map[string]any
-
-type PageObject struct {
-	Component      string              `json:"component"`
-	URL            string              `json:"url"`
-	Props          Props               `json:"props"`
-	Version        string              `json:"version"`
-	EncryptHistory bool                `json:"encryptHistory"`
-	ClearHistory   bool                `json:"clearHistory"`
-	MergeProps     []string            `json:"mergeProps"`
-	PrependProps   []string            `json:"prependProps"`
-	DeepMergeProps []string            `json:"deepMergeProps"`
-	MatchPropsOn   []string            `json:"matchPropsOn"`
-	ScrollProps    Props               `json:"scrollProps"`
-	DeferredProps  map[string][]string `json:"deferredProps"`
-	OnceProps      map[string]onceProp `json:"onceProps"`
-}
-
-type onceProp struct {
-	Prop      string `json:"prop"`
-	ExpiresAt string `json:"expiresAt"`
-}
-
 var inertiaBodyTemplate = template.Must(template.New("inertiaBody").Parse(`<div id="app" data-page="{{ . }}"></div>`))
 
 func (i *Inertia) getSSREngine(ctx context.Context) (SSREngine, error) {
@@ -272,40 +251,92 @@ func (i *Inertia) Logger() Logger {
 	return i.logger
 }
 
-func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props) error {
-	if props == nil {
-		props = Props{}
+type processedProps struct {
+	finalProps    Props
+	deferredProps map[string][]string
+	onceProps     map[string]onceProp
+}
+
+func newProcessedProps() processedProps {
+	return processedProps{
+		finalProps:    make(Props),
+		deferredProps: make(map[string][]string),
+		onceProps:     make(map[string]onceProp),
+	}
+}
+
+var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[processedProps](func(p processedProps) {
+	clear(p.finalProps)
+	clear(p.deferredProps)
+	clear(p.onceProps)
+}))
+
+func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (processedProps, error) {
+	p := processedPropsPool.Get()
+
+	if _, ok := props["errors"]; !ok {
+		props["errors"] = Always(json.RawMessage(`{}`))
 	}
 
-	if _, ok := props["error"]; !ok {
-		props["errors"] = json.RawMessage(`{}`)
+	for key, value := range props {
+		var prop Prop
+		if p, ok := value.(Prop); ok {
+			prop = p
+		} else {
+			prop = Prop{Type: propTypeDefault, Value: value}
+		}
+
+		shouldInclude := prop.ShouldInclude(key, headers)
+
+		if shouldInclude {
+			val, err := prop.Resolve(ctx)
+			if err != nil {
+				return p, err
+			}
+			p.finalProps[key] = val
+		} else {
+			switch prop.Type {
+			case propTypeDeferred:
+				group := "default"
+				if prop.Group != "" {
+					group = prop.Group
+				}
+				p.deferredProps[group] = append(p.deferredProps[group], key)
+			}
+		}
+
+		if prop.Type == propTypeOnce {
+			op := onceProp{Prop: key}
+			if prop.ExpiresAt != nil {
+				op.ExpiresAt = *prop.ExpiresAt
+			}
+			p.onceProps[key] = op
+		}
 	}
 
-	pageObject := PageObject{
-		Component: component,
-		URL:       r.URL.Path,
-		Props:     props,
-	}
+	return p, nil
+}
 
-	if r.Header.Get(XInertia) == "true" {
-		i.logger.LogAttrs(r.Context(),
-			slog.LevelDebug, "inertia request detected, rendering json",
-			slog.String("component", component),
-			slog.String("url", r.URL.Path),
-		)
-
-		w.Header().Set(XInertia, "true")
-		w.Header().Set("Vary", XInertia)
-		return json.NewEncoder(w).Encode(pageObject)
-	}
-
-	i.logger.LogAttrs(
-		r.Context(), slog.LevelDebug, "rendering full page",
-		slog.String("component", component),
-		slog.String("url", r.URL.Path),
+func (i *Inertia) renderJSON(w http.ResponseWriter, r *http.Request, page *PageObject) error {
+	i.logger.LogAttrs(r.Context(),
+		slog.LevelDebug, "inertia request detected, rendering json",
+		slog.String("component", page.Component),
+		slog.String("url", page.URL),
 	)
 
-	pageObjectJSON, err := json.Marshal(pageObject)
+	w.Header().Set(XInertia, "true")
+	w.Header().Set("Vary", XInertia)
+	return json.NewEncoder(w).Encode(page)
+}
+
+func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageObject) error {
+	i.logger.LogAttrs(
+		r.Context(), slog.LevelDebug, "rendering full page",
+		slog.String("component", page.Component),
+		slog.String("url", page.URL),
+	)
+
+	pageObjectJSON, err := json.Marshal(page)
 	if err != nil {
 		return err
 	}
@@ -320,7 +351,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 			return err
 		}
 
-		renderedPage, err := engine.Render(pageObject)
+		renderedPage, err := engine.Render(*page)
 		if err != nil {
 			return err
 		}
@@ -348,4 +379,47 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 	}
 
 	return i.rootTemplate.Execute(w, view)
+}
+
+type PageObject struct {
+	Component      string              `json:"component"`
+	URL            string              `json:"url"`
+	Props          Props               `json:"props"`
+	Version        string              `json:"version"`
+	EncryptHistory bool                `json:"encryptHistory"`
+	ClearHistory   bool                `json:"clearHistory"`
+	MergeProps     []string            `json:"mergeProps"`
+	PrependProps   []string            `json:"prependProps"`
+	DeepMergeProps []string            `json:"deepMergeProps"`
+	MatchPropsOn   []string            `json:"matchPropsOn"`
+	ScrollProps    Props               `json:"scrollProps"`
+	DeferredProps  map[string][]string `json:"deferredProps"`
+	OnceProps      map[string]onceProp `json:"onceProps"`
+}
+
+func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props) error {
+	if props == nil {
+		props = Props{}
+	}
+
+	headers := parseInertiaHeaders(r, component)
+	p, err := i.processProps(r.Context(), props, headers)
+	defer processedPropsPool.Put(p)
+	if err != nil {
+		return err
+	}
+
+	pageObject := &PageObject{
+		Component:     component,
+		URL:           r.URL.Path,
+		Props:         p.finalProps,
+		DeferredProps: p.deferredProps,
+		OnceProps:     p.onceProps,
+	}
+
+	if headers.IsInertia {
+		return i.renderJSON(w, r, pageObject)
+	}
+
+	return i.renderHTML(w, r, pageObject)
 }
