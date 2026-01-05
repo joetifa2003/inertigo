@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	inertia "go-ssr-experiment"
-	"go-ssr-experiment/vite"
+	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/vite"
 )
 
 func main() {
@@ -37,6 +37,8 @@ func main() {
 	must(err)
 
 	mux := http.NewServeMux()
+
+	mux.Handle(bundler.AssetPrefix(), bundler.Handler())
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		err = i.Render(w, r, "index", inertia.Props{

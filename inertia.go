@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"go-ssr-experiment/internal/pool"
+	"github.com/joetifa2003/inertigo/internal/pool"
 )
 
 type Inertia struct {

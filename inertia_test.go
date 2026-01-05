@@ -7,8 +7,11 @@ import (
 	"testing"
 	"time"
 
-	inertia "go-ssr-experiment"
-	"go-ssr-experiment/vite"
+	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/vite"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRender_PartialReload(t *testing.T) {
@@ -16,14 +19,10 @@ func TestRender_PartialReload(t *testing.T) {
 		nil,
 		vite.WithDevMode(true),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	i, err := inertia.New(bundler)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tests := []struct {
 		name            string
@@ -177,27 +176,20 @@ func TestRender_PartialReload(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			err := i.Render(w, req, "TestComponent", tt.props)
-			if err != nil {
-				t.Fatalf("Render() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			var resp inertia.PageObject
-			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-				t.Fatal(err)
-			}
+			err = json.NewDecoder(w.Body).Decode(&resp)
+			require.NoError(t, err)
 
 			// Verify expected props present
 			for _, k := range tt.expectedProps {
-				if _, ok := resp.Props[k]; !ok {
-					t.Errorf("expected prop %q missing", k)
-				}
+				assert.Contains(t, resp.Props, k, "expected prop %q missing", k)
 			}
 
 			// Verify unexpected props missing
 			for _, k := range tt.unexpectedProps {
-				if _, ok := resp.Props[k]; ok {
-					t.Errorf("unexpected prop %q present", k)
-				}
+				assert.NotContains(t, resp.Props, k, "unexpected prop %q present", k)
 			}
 		})
 	}

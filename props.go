@@ -12,11 +12,11 @@ type PropFunc func(ctx context.Context) (any, error)
 type PropType int
 
 const (
-	propTypeDefault PropType = iota
-	propTypeDeferred
-	propTypeOptional
-	propTypeAlways
-	propTypeOnce
+	PropTypeDefault PropType = iota
+	PropTypeDeferred
+	PropTypeOptional
+	PropTypeAlways
+	PropTypeOnce
 )
 
 type Prop struct {
@@ -24,32 +24,32 @@ type Prop struct {
 	Value     any
 	Resolver  PropFunc
 	ExpiresAt *string // For Once props, null means forever
-	Group     string  // For deferred props grouping
+	Group     string  // For Deferred props grouping
 }
 
 func Deferred(resolver PropFunc) Prop {
-	return Prop{Type: propTypeDeferred, Resolver: resolver}
+	return Prop{Type: PropTypeDeferred, Resolver: resolver}
 }
 
 func DeferredGroup(group string, resolver PropFunc) Prop {
-	return Prop{Type: propTypeDeferred, Resolver: resolver, Group: group}
+	return Prop{Type: PropTypeDeferred, Resolver: resolver, Group: group}
 }
 
 func Optional(resolver PropFunc) Prop {
-	return Prop{Type: propTypeOptional, Resolver: resolver}
+	return Prop{Type: PropTypeOptional, Resolver: resolver}
 }
 
 func Always(value any) Prop {
-	return Prop{Type: propTypeAlways, Value: value}
+	return Prop{Type: PropTypeAlways, Value: value}
 }
 
 func Once(resolver PropFunc) Prop {
-	return Prop{Type: propTypeOnce, Resolver: resolver}
+	return Prop{Type: PropTypeOnce, Resolver: resolver}
 }
 
 func OnceWithExpiration(resolver PropFunc, expiration time.Duration) Prop {
 	expiresAt := fmt.Sprintf("%d", time.Now().Add(expiration).UnixMilli())
-	return Prop{Type: propTypeOnce, Resolver: resolver, ExpiresAt: &expiresAt}
+	return Prop{Type: PropTypeOnce, Resolver: resolver, ExpiresAt: &expiresAt}
 }
 
 type Props map[string]any
@@ -71,7 +71,7 @@ func (p *Prop) Resolve(ctx context.Context) (any, error) {
 // It returns true if the prop should be included in the 'props' key of the PageObject.
 func (p *Prop) ShouldInclude(key string, headers *inertiaHeaders) bool {
 	switch p.Type {
-	case propTypeDefault:
+	case PropTypeDefault:
 		if headers.IsPartial {
 			// Default props:
 			// Include if explicitly requested (Data)
@@ -90,10 +90,10 @@ func (p *Prop) ShouldInclude(key string, headers *inertiaHeaders) bool {
 		}
 		return true
 
-	case propTypeAlways:
+	case PropTypeAlways:
 		return true
 
-	case propTypeOptional:
+	case PropTypeOptional:
 		// Optional props (Lazy):
 		// Default: Exclude
 		// Partial: Include ONLY if explicitly requested in Data
@@ -107,7 +107,7 @@ func (p *Prop) ShouldInclude(key string, headers *inertiaHeaders) bool {
 		}
 		return false
 
-	case propTypeDeferred:
+	case PropTypeDeferred:
 		// Deferred props:
 		// Initial visit: Exclude.
 		// Partial visit:
@@ -123,7 +123,7 @@ func (p *Prop) ShouldInclude(key string, headers *inertiaHeaders) bool {
 		}
 		return false
 
-	case propTypeOnce:
+	case PropTypeOnce:
 		if len(headers.ExceptOnceProps) > 0 && slices.Contains(headers.ExceptOnceProps, key) {
 			return false
 		}
