@@ -1,21 +1,26 @@
-package inertia
+package inertia_test
 
 import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
+
+	inertia "go-ssr-experiment"
+	"go-ssr-experiment/vite"
 )
 
 func TestRender_PartialReload(t *testing.T) {
-	i, err := New(
-		WithViteURL("http://localhost:5173"),
-		WithEntryPoint("test.js"),
-		WithDevMode(true),
-		WithViteFS(os.DirFS(".")),
+	bundler, err := vite.New(
+		nil,
+		vite.WithDevMode(true),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	i, err := inertia.New(bundler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +28,7 @@ func TestRender_PartialReload(t *testing.T) {
 	tests := []struct {
 		name            string
 		headers         map[string]string
-		props           Props
+		props           inertia.Props
 		expectedProps   []string
 		unexpectedProps []string
 	}{
@@ -32,7 +37,7 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				"X-Inertia": "true",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
 				"baz": "qux",
 			},
@@ -45,7 +50,7 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Data":      "foo",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
 				"baz": "qux",
 			},
@@ -59,7 +64,7 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Data":      "foo,baz",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
 				"baz": "qux",
 			},
@@ -72,7 +77,7 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Except":    "foo",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
 				"baz": "qux",
 			},
@@ -84,9 +89,9 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				"X-Inertia": "true",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
-				"def": Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
+				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
 			},
 			expectedProps:   []string{"foo", "errors"},
 			unexpectedProps: []string{"def"},
@@ -98,9 +103,9 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Data":      "def",
 			},
-			props: Props{
+			props: inertia.Props{
 				"foo": "bar",
-				"def": Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
+				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
 			},
 			expectedProps:   []string{"def", "errors"},
 			unexpectedProps: []string{"foo"},
@@ -110,8 +115,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				"X-Inertia": "true",
 			},
-			props: Props{
-				"opt": Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
+			props: inertia.Props{
+				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
 			},
 			expectedProps:   []string{"errors"},
 			unexpectedProps: []string{"opt"},
@@ -123,8 +128,8 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Data":      "opt",
 			},
-			props: Props{
-				"opt": Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
+			props: inertia.Props{
+				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
 			},
 			expectedProps: []string{"opt", "errors"},
 		},
@@ -135,8 +140,8 @@ func TestRender_PartialReload(t *testing.T) {
 				"X-Inertia-Partial-Component": "TestComponent",
 				"X-Inertia-Partial-Data":      "other",
 			},
-			props: Props{
-				"alw":   Always("always"),
+			props: inertia.Props{
+				"alw":   inertia.Always("always"),
 				"other": "other",
 			},
 			expectedProps: []string{"alw", "other", "errors"},
@@ -146,8 +151,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				"X-Inertia": "true",
 			},
-			props: Props{
-				"onc": Once(func(ctx context.Context) (any, error) { return "once", nil }),
+			props: inertia.Props{
+				"onc": inertia.Once(func(ctx context.Context) (any, error) { return "once", nil }),
 			},
 			expectedProps: []string{"onc", "errors"},
 		},
@@ -156,8 +161,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				"X-Inertia": "true",
 			},
-			props: Props{
-				"onc_exp": OnceWithExpiration(func(ctx context.Context) (any, error) { return "once_exp", nil }, 1*time.Hour),
+			props: inertia.Props{
+				"onc_exp": inertia.OnceWithExpiration(func(ctx context.Context) (any, error) { return "once_exp", nil }, 1*time.Hour),
 			},
 			expectedProps: []string{"onc_exp", "errors"},
 		},
@@ -176,7 +181,7 @@ func TestRender_PartialReload(t *testing.T) {
 				t.Fatalf("Render() error = %v", err)
 			}
 
-			var resp PageObject
+			var resp inertia.PageObject
 			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 				t.Fatal(err)
 			}

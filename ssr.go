@@ -6,5 +6,6 @@ type RenderedPage struct {
 }
 
 type SSREngine interface {
+	Name() string
 	Render(pageObject PageObject) (RenderedPage, error)
 }

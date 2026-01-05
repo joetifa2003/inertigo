@@ -119,6 +119,8 @@ f.subarray(0,c):f.slice(0,c)};E||(r.TextDecoder=x,r.TextEncoder=y)})(""+void 0==
 	}, nil
 }
 
+func (q *QJSEngine) Name() string { return "qjs" }
+
 func (q *QJSEngine) Render(page PageObject) (RenderedPage, error) {
 	rt, err := q.pool.Get()
 	if err != nil {

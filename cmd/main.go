@@ -9,24 +9,24 @@ import (
 	"time"
 
 	inertia "go-ssr-experiment"
+	"go-ssr-experiment/vite"
 )
 
 func main() {
 	isDev := flag.Bool("dev", false, "development mode")
 	flag.Parse()
 
+	bundler, err := vite.New(
+		os.DirFS("assets/dist"),
+		vite.WithDevMode(*isDev),
+		vite.WithReactRefresh(),
+	)
+	must(err)
+
 	i, err := inertia.New(
+		bundler,
 		inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil))),
-
-		inertia.WithViteFS(os.DirFS("assets")),
-		inertia.WithViteDistFS(os.DirFS("assets/dist")),
 		inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
-		inertia.WithEntryPoint("ts/app.tsx"),
-
-		inertia.WithViteURL("http://localhost:5173"),
-		inertia.WithReactRefresh(),
-		inertia.WithDevMode(*isDev),
-
 		inertia.WithSSR(true, func() (inertia.SSREngine, error) {
 			return inertia.NewQJSEngine(
 				inertia.WithSrcPath("assets/dist/server/ssr.js"),

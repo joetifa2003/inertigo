@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/olivere/vite"
-
 	"go-ssr-experiment/internal/pool"
 )
 
@@ -21,10 +19,7 @@ type Inertia struct {
 	logger Logger
 
 	rootTemplate *template.Template
-	vite         *vite.Fragment
-
-	viteURL string
-	isDev   bool
+	bundler      Bundler
 
 	ssrEnabled       bool
 	ssrEngineFactory func() (SSREngine, error)
@@ -33,13 +28,8 @@ type Inertia struct {
 }
 
 type inertiaConfig struct {
-	viteURL          string
-	isDev            bool
-	entryPoint       string
-	viteSource       fs.FS
-	viteDist         fs.FS
-	withReactRefresh bool
-	rootTemplate     *template.Template
+	rootTemplateFS   fs.FS
+	rootTemplatePath string
 
 	ssrEnabled       bool
 	ssrEngineFactory func() (SSREngine, error)
@@ -49,76 +39,17 @@ type inertiaConfig struct {
 
 type InertiaOption func(config *inertiaConfig) error
 
-func WithViteURL(url string) InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.viteURL = url
-
-		return nil
-	}
-}
-
-func WithDevMode(isDev bool) InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.isDev = isDev
-
-		return nil
-	}
-}
-
-func WithEntryPoint(entryPoint string) InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.entryPoint = entryPoint
-
-		return nil
-	}
-}
-
-func WithViteFS(source fs.FS) InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.viteSource = source
-
-		return nil
-	}
-}
-
-func WithViteDistFS(dist fs.FS) InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.viteDist = dist
-
-		return nil
-	}
-}
-
-func WithReactRefresh() InertiaOption {
-	return func(config *inertiaConfig) error {
-		config.withReactRefresh = true
-
-		return nil
-	}
-}
-
 func WithRootHtmlPath(root string) InertiaOption {
 	return func(config *inertiaConfig) error {
-		var err error
-
-		config.rootTemplate, err = template.New("index.html").ParseFiles(root)
-		if err != nil {
-			return err
-		}
-
+		config.rootTemplatePath = root
 		return nil
 	}
 }
 
-func WithRooHtmlPathFS(fs fs.FS, path string) InertiaOption {
+func WithRooHtmlPathFS(fsys fs.FS, path string) InertiaOption {
 	return func(config *inertiaConfig) error {
-		var err error
-
-		config.rootTemplate, err = template.New("index.html").ParseFS(fs, path)
-		if err != nil {
-			return err
-		}
-
+		config.rootTemplateFS = fsys
+		config.rootTemplatePath = path
 		return nil
 	}
 }
@@ -143,12 +74,12 @@ type Logger interface {
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
 }
 
-func New(options ...InertiaOption) (*Inertia, error) {
+// New creates a new Inertia instance.
+// bundler is the asset bundler to use for resolving script/link tags.
+func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 	var err error
 
-	config := &inertiaConfig{
-		viteURL: "http://localhost:5173",
-	}
+	config := &inertiaConfig{}
 
 	for _, option := range options {
 		err = option(config)
@@ -157,33 +88,26 @@ func New(options ...InertiaOption) (*Inertia, error) {
 		}
 	}
 
-	viteConfig := vite.Config{
-		FS:              config.viteDist,
-		IsDev:           config.isDev,
-		ViteEntry:       config.entryPoint,
-		ViteURL:         config.viteURL,
-		ViteTemplate:    vite.None,
-		AssetsURLPrefix: "foo",
-	}
-
-	if config.isDev {
-		viteConfig.FS = config.viteSource
-	}
-	if config.withReactRefresh {
-		viteConfig.ViteTemplate = vite.React
-	}
-
 	i := Inertia{
-		rootTemplate:     config.rootTemplate,
+		bundler:          b,
 		ssrEnabled:       config.ssrEnabled,
 		ssrEngineFactory: config.ssrEngineFactory,
-		isDev:            config.isDev,
-		viteURL:          config.viteURL,
 		logger:           config.logger,
 	}
-	i.vite, err = vite.HTMLFragment(viteConfig)
-	if err != nil {
-		return nil, err
+
+	// Parse root template with bundler's template functions
+	if config.rootTemplatePath != "" {
+		tmpl := template.New("index.html")
+		tmpl = tmpl.Funcs(b.TemplateFuncs())
+
+		if config.rootTemplateFS != nil {
+			i.rootTemplate, err = tmpl.ParseFS(config.rootTemplateFS, config.rootTemplatePath)
+		} else {
+			i.rootTemplate, err = tmpl.ParseFiles(config.rootTemplatePath)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if i.logger == nil {
@@ -215,17 +139,17 @@ func (i *Inertia) getSSREngine(ctx context.Context) (SSREngine, error) {
 		)
 
 		if i.ssrEngine == nil {
-			if i.isDev {
-				engine, err := newViteSSREngine(i.viteURL)
+			// Check if bundler implements BundlerDevSSR for dev mode
+			if devSSR, ok := i.bundler.(BundlerDevSSR); ok && devSSR.IsDev() {
+				engine, err := devSSR.DevSSREngine()
 				if err != nil {
 					return nil, err
 				}
 				i.ssrEngine = engine
 				i.logger.LogAttrs(
 					ctx, slog.LevelInfo,
-					"dev mode enabled, starting vite ssr engine",
-					slog.String("engine", "vite"),
-					slog.String("url", i.viteURL),
+					"dev mode enabled, starting bundler ssr engine",
+					slog.String("engine", engine.Name()),
 				)
 			} else {
 				t1 := time.Now()
@@ -237,7 +161,7 @@ func (i *Inertia) getSSREngine(ctx context.Context) (SSREngine, error) {
 				i.logger.LogAttrs(
 					ctx, slog.LevelInfo,
 					"ssr engine started",
-					slog.String("engine", "custom"),
+					slog.String("engine", engine.Name()),
 					slog.String("dur", time.Since(t1).String()),
 				)
 			}
@@ -358,10 +282,11 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 		i.logger.LogAttrs(
 			r.Context(), slog.LevelInfo,
 			"ssr engine rendered page",
+			slog.String("engine", engine.Name()),
 			slog.String("dur", time.Since(t1).String()),
 		)
 
-		head = append([]string{string(i.vite.Tags)}, renderedPage.Head...)
+		head = renderedPage.Head
 		body = renderedPage.Body
 	} else {
 		inertiaBodyBuf := bytes.NewBuffer(nil)
@@ -369,7 +294,6 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 		if err != nil {
 			return err
 		}
-		head = []string{string(i.vite.Tags)}
 		body = inertiaBodyBuf.String()
 	}
 
