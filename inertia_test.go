@@ -323,3 +323,210 @@ func TestMiddleware_NonInertiaRequest(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, handlerCalled, "handler should be called for non-Inertia requests")
 }
+
+func TestRender_EncryptHistoryOption(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		options       []inertia.RenderOption
+		expectedValue bool
+	}{
+		{
+			name:          "no options - defaults to false",
+			options:       nil,
+			expectedValue: false,
+		},
+		{
+			name:          "WithEncryptHistory(true)",
+			options:       []inertia.RenderOption{inertia.WithEncryptHistory(true)},
+			expectedValue: true,
+		},
+		{
+			name:          "WithEncryptHistory(false)",
+			options:       []inertia.RenderOption{inertia.WithEncryptHistory(false)},
+			expectedValue: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-Inertia", "true")
+			w := httptest.NewRecorder()
+
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			require.NoError(t, err)
+
+			var resp inertia.PageObject
+			err = json.NewDecoder(w.Body).Decode(&resp)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedValue, resp.EncryptHistory)
+		})
+	}
+}
+
+func TestRender_ClearHistoryOption(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		options       []inertia.RenderOption
+		expectedValue bool
+	}{
+		{
+			name:          "no options - defaults to false",
+			options:       nil,
+			expectedValue: false,
+		},
+		{
+			name:          "WithClearHistory(true)",
+			options:       []inertia.RenderOption{inertia.WithClearHistory(true)},
+			expectedValue: true,
+		},
+		{
+			name:          "WithClearHistory(false)",
+			options:       []inertia.RenderOption{inertia.WithClearHistory(false)},
+			expectedValue: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-Inertia", "true")
+			w := httptest.NewRecorder()
+
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			require.NoError(t, err)
+
+			var resp inertia.PageObject
+			err = json.NewDecoder(w.Body).Decode(&resp)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedValue, resp.ClearHistory)
+		})
+	}
+}
+
+func TestRender_MergePropsOptions(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                   string
+		options                []inertia.RenderOption
+		expectedMergeProps     []string
+		expectedPrependProps   []string
+		expectedDeepMergeProps []string
+		expectedMatchPropsOn   []string
+	}{
+		{
+			name:                   "no options - all nil",
+			options:                nil,
+			expectedMergeProps:     nil,
+			expectedPrependProps:   nil,
+			expectedDeepMergeProps: nil,
+			expectedMatchPropsOn:   nil,
+		},
+		{
+			name:               "WithMergeProps",
+			options:            []inertia.RenderOption{inertia.WithMergeProps("posts", "comments")},
+			expectedMergeProps: []string{"posts", "comments"},
+		},
+		{
+			name:                 "WithPrependProps",
+			options:              []inertia.RenderOption{inertia.WithPrependProps("notifications")},
+			expectedPrependProps: []string{"notifications"},
+		},
+		{
+			name:                   "WithDeepMergeProps",
+			options:                []inertia.RenderOption{inertia.WithDeepMergeProps("conversations")},
+			expectedDeepMergeProps: []string{"conversations"},
+		},
+		{
+			name:                 "WithMatchPropsOn",
+			options:              []inertia.RenderOption{inertia.WithMatchPropsOn("posts.id", "comments.id")},
+			expectedMatchPropsOn: []string{"posts.id", "comments.id"},
+		},
+		{
+			name: "multiple options combined",
+			options: []inertia.RenderOption{
+				inertia.WithMergeProps("posts"),
+				inertia.WithPrependProps("notifications"),
+				inertia.WithDeepMergeProps("conversations"),
+				inertia.WithMatchPropsOn("posts.id"),
+			},
+			expectedMergeProps:     []string{"posts"},
+			expectedPrependProps:   []string{"notifications"},
+			expectedDeepMergeProps: []string{"conversations"},
+			expectedMatchPropsOn:   []string{"posts.id"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-Inertia", "true")
+			w := httptest.NewRecorder()
+
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			require.NoError(t, err)
+
+			var resp inertia.PageObject
+			err = json.NewDecoder(w.Body).Decode(&resp)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedMergeProps, resp.MergeProps)
+			assert.Equal(t, tt.expectedPrependProps, resp.PrependProps)
+			assert.Equal(t, tt.expectedDeepMergeProps, resp.DeepMergeProps)
+			assert.Equal(t, tt.expectedMatchPropsOn, resp.MatchPropsOn)
+		})
+	}
+}
+
+func TestRender_MultipleOptionsComposability(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Inertia", "true")
+	w := httptest.NewRecorder()
+
+	// Test that all options can be used together
+	err = i.Render(w, req, "TestComponent", inertia.Props{"data": "value"},
+		inertia.WithEncryptHistory(true),
+		inertia.WithClearHistory(true),
+		inertia.WithMergeProps("items"),
+		inertia.WithPrependProps("newItems"),
+		inertia.WithDeepMergeProps("settings"),
+		inertia.WithMatchPropsOn("items.id"),
+	)
+	require.NoError(t, err)
+
+	var resp inertia.PageObject
+	err = json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+
+	assert.True(t, resp.EncryptHistory)
+	assert.True(t, resp.ClearHistory)
+	assert.Equal(t, []string{"items"}, resp.MergeProps)
+	assert.Equal(t, []string{"newItems"}, resp.PrependProps)
+	assert.Equal(t, []string{"settings"}, resp.DeepMergeProps)
+	assert.Equal(t, []string{"items.id"}, resp.MatchPropsOn)
+}

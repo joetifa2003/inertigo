@@ -362,9 +362,70 @@ type PageObject struct {
 	OnceProps      map[string]onceProp `json:"onceProps"`
 }
 
-func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props) error {
+// renderConfig holds per-render configuration options
+type renderConfig struct {
+	encryptHistory *bool
+	clearHistory   *bool
+	mergeProps     []string
+	prependProps   []string
+	deepMergeProps []string
+	matchPropsOn   []string
+}
+
+// RenderOption configures the behavior of a single Render call
+type RenderOption func(config *renderConfig)
+
+// WithEncryptHistory sets whether to encrypt the page's history state
+func WithEncryptHistory(encrypt bool) RenderOption {
+	return func(config *renderConfig) {
+		config.encryptHistory = &encrypt
+	}
+}
+
+// WithClearHistory sets whether to clear encrypted history state
+func WithClearHistory(clear bool) RenderOption {
+	return func(config *renderConfig) {
+		config.clearHistory = &clear
+	}
+}
+
+// WithMergeProps specifies prop keys that should be appended during navigation
+func WithMergeProps(props ...string) RenderOption {
+	return func(config *renderConfig) {
+		config.mergeProps = append(config.mergeProps, props...)
+	}
+}
+
+// WithPrependProps specifies prop keys that should be prepended during navigation
+func WithPrependProps(props ...string) RenderOption {
+	return func(config *renderConfig) {
+		config.prependProps = append(config.prependProps, props...)
+	}
+}
+
+// WithDeepMergeProps specifies prop keys that should be deep merged during navigation
+func WithDeepMergeProps(props ...string) RenderOption {
+	return func(config *renderConfig) {
+		config.deepMergeProps = append(config.deepMergeProps, props...)
+	}
+}
+
+// WithMatchPropsOn specifies prop keys used for matching when merging
+func WithMatchPropsOn(props ...string) RenderOption {
+	return func(config *renderConfig) {
+		config.matchPropsOn = append(config.matchPropsOn, props...)
+	}
+}
+
+func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props, options ...RenderOption) error {
 	if props == nil {
 		props = Props{}
+	}
+
+	// Apply render options
+	config := &renderConfig{}
+	for _, opt := range options {
+		opt(config)
 	}
 
 	headers := parseInertiaHeaders(r, component)
@@ -375,12 +436,18 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 	}
 
 	pageObject := &PageObject{
-		Component:     component,
-		URL:           r.URL.Path,
-		Props:         p.finalProps,
-		Version:       i.version,
-		DeferredProps: p.deferredProps,
-		OnceProps:     p.onceProps,
+		Component:      component,
+		URL:            r.URL.Path,
+		Props:          p.finalProps,
+		Version:        i.version,
+		EncryptHistory: config.encryptHistory != nil && *config.encryptHistory,
+		ClearHistory:   config.clearHistory != nil && *config.clearHistory,
+		MergeProps:     config.mergeProps,
+		PrependProps:   config.prependProps,
+		DeepMergeProps: config.deepMergeProps,
+		MatchPropsOn:   config.matchPropsOn,
+		DeferredProps:  p.deferredProps,
+		OnceProps:      p.onceProps,
 	}
 
 	if headers.IsInertia {
