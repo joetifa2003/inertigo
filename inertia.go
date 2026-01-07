@@ -247,19 +247,14 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 	p := processedPropsPool.Get()
 
 	if _, ok := props["errors"]; !ok {
-		props["errors"] = Always(json.RawMessage(`{}`))
+		props["errors"] = map[string]any{}
 	}
 
 	for key, value := range props {
 		// Handle ScrollProp specially
 		if scrollProp, ok := value.(ScrollProp); ok {
 			// Store scroll config
-			p.scrollProps[key] = map[string]any{
-				"pageName":     scrollProp.Config.PageName,
-				"previousPage": scrollProp.Config.PreviousPage,
-				"nextPage":     scrollProp.Config.NextPage,
-				"currentPage":  scrollProp.Config.CurrentPage,
-			}
+			p.scrollProps[key] = scrollProp.Config
 
 			// Determine merge behavior based on request header
 			if headers.InfiniteScrollMerge == "prepend" {
