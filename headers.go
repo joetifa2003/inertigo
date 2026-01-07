@@ -6,20 +6,22 @@ import (
 )
 
 type inertiaHeaders struct {
-	Component       string
-	Version         string
-	PartialData     []string
-	PartialExcept   []string
-	ExceptOnceProps []string
-	IsPartial       bool
-	IsInertia       bool
+	Component           string
+	Version             string
+	PartialData         []string
+	PartialExcept       []string
+	ExceptOnceProps     []string
+	InfiniteScrollMerge string // "append" or "prepend"
+	IsPartial           bool
+	IsInertia           bool
 }
 
 func parseInertiaHeaders(r *http.Request, component string) *inertiaHeaders {
 	headers := &inertiaHeaders{
-		Component: r.Header.Get("X-Inertia-Partial-Component"),
-		Version:   r.Header.Get("X-Inertia-Version"),
-		IsInertia: r.Header.Get(XInertia) == "true",
+		Component:           r.Header.Get("X-Inertia-Partial-Component"),
+		Version:             r.Header.Get("X-Inertia-Version"),
+		IsInertia:           r.Header.Get(XInertia) == "true",
+		InfiniteScrollMerge: r.Header.Get("X-Inertia-Infinite-Scroll-Merge-Intent"),
 	}
 
 	headers.IsPartial = headers.IsInertia && headers.Component == component
