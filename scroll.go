@@ -2,10 +2,10 @@ package inertia
 
 // ScrollConfig holds the pagination metadata for infinite scroll.
 type ScrollConfig struct {
-	PageName     string // Query parameter name for pagination (e.g., "page")
-	PreviousPage any    // Previous page number/cursor (nil if no previous)
-	NextPage     any    // Next page number/cursor (nil if no next)
-	CurrentPage  any    // Current page number/cursor
+	PageName     string `json:"pageName"`     // Query parameter name for pagination (e.g., "page")
+	PreviousPage any    `json:"previousPage"` // Previous page number/cursor (nil if no previous)
+	NextPage     any    `json:"nextPage"`     // Next page number/cursor (nil if no next)
+	CurrentPage  any    `json:"currentPage"`  // Current page number/cursor
 }
 
 // ScrollProp wraps data with scroll configuration for infinite scroll support.

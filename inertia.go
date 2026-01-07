@@ -247,7 +247,7 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 	p := processedPropsPool.Get()
 
 	if _, ok := props["errors"]; !ok {
-		props["errors"] = map[string]any{}
+		props["errors"] = Always(map[string]any{})
 	}
 
 	for key, value := range props {

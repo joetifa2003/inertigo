@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	inertia "github.com/joetifa2003/inertigo"
-	"github.com/joetifa2003/inertigo/vite"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/vite"
 )
 
 func TestRender_PartialReload(t *testing.T) {
