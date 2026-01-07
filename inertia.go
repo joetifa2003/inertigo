@@ -220,6 +220,9 @@ type processedProps struct {
 	finalProps    Props
 	deferredProps map[string][]string
 	onceProps     map[string]onceProp
+	scrollProps   Props    // Map of prop key to scroll config
+	mergeProps    []string // Prop paths to merge on navigation
+	prependProps  []string // Prop paths to prepend on navigation
 }
 
 func newProcessedProps() processedProps {
@@ -227,6 +230,7 @@ func newProcessedProps() processedProps {
 		finalProps:    make(Props),
 		deferredProps: make(map[string][]string),
 		onceProps:     make(map[string]onceProp),
+		scrollProps:   make(Props),
 	}
 }
 
@@ -234,6 +238,9 @@ var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[
 	clear(p.finalProps)
 	clear(p.deferredProps)
 	clear(p.onceProps)
+	clear(p.scrollProps)
+	p.mergeProps = p.mergeProps[:0]
+	p.prependProps = p.prependProps[:0]
 }))
 
 func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (processedProps, error) {
@@ -244,6 +251,28 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 	}
 
 	for key, value := range props {
+		// Handle ScrollProp specially
+		if scrollProp, ok := value.(ScrollProp); ok {
+			// Store scroll config
+			p.scrollProps[key] = map[string]any{
+				"pageName":     scrollProp.Config.PageName,
+				"previousPage": scrollProp.Config.PreviousPage,
+				"nextPage":     scrollProp.Config.NextPage,
+				"currentPage":  scrollProp.Config.CurrentPage,
+			}
+
+			// Determine merge behavior based on request header
+			if headers.InfiniteScrollMerge == "prepend" {
+				p.prependProps = append(p.prependProps, scrollProp.MergePath)
+			} else {
+				p.mergeProps = append(p.mergeProps, scrollProp.MergePath)
+			}
+
+			// Set the actual data as the prop value
+			p.finalProps[key] = scrollProp.Data
+			continue
+		}
+
 		var prop Prop
 		if p, ok := value.(Prop); ok {
 			prop = p
@@ -442,12 +471,13 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		Version:        i.version,
 		EncryptHistory: config.encryptHistory != nil && *config.encryptHistory,
 		ClearHistory:   config.clearHistory != nil && *config.clearHistory,
-		MergeProps:     config.mergeProps,
-		PrependProps:   config.prependProps,
+		MergeProps:     append(config.mergeProps, p.mergeProps...),
+		PrependProps:   append(config.prependProps, p.prependProps...),
 		DeepMergeProps: config.deepMergeProps,
 		MatchPropsOn:   config.matchPropsOn,
 		DeferredProps:  p.deferredProps,
 		OnceProps:      p.onceProps,
+		ScrollProps:    p.scrollProps,
 	}
 
 	if headers.IsInertia {
