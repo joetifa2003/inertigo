@@ -3,11 +3,15 @@ package inertia
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +20,8 @@ import (
 )
 
 type Inertia struct {
-	logger Logger
+	logger  Logger
+	version string
 
 	rootTemplate *template.Template
 	bundler      Bundler
@@ -34,7 +39,8 @@ type inertiaConfig struct {
 	ssrEnabled       bool
 	ssrEngineFactory func() (SSREngine, error)
 
-	logger Logger
+	logger  Logger
+	version string
 }
 
 type InertiaOption func(config *inertiaConfig) error
@@ -69,6 +75,40 @@ func WithLogger(logger Logger) InertiaOption {
 	}
 }
 
+// WithVersion sets a static version string for asset versioning.
+func WithVersion(version string) InertiaOption {
+	return func(config *inertiaConfig) error {
+		config.version = version
+		return nil
+	}
+}
+
+// WithVersionFromFile computes version from file checksum (MD5 hash).
+func WithVersionFromFile(path string) InertiaOption {
+	return func(config *inertiaConfig) error {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read version file: %w", err)
+		}
+		hash := md5.Sum(data)
+		config.version = hex.EncodeToString(hash[:])
+		return nil
+	}
+}
+
+// WithVersionFromFileFS computes version from file checksum using fs.FS.
+func WithVersionFromFileFS(fsys fs.FS, path string) InertiaOption {
+	return func(config *inertiaConfig) error {
+		data, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return fmt.Errorf("failed to read version file: %w", err)
+		}
+		hash := md5.Sum(data)
+		config.version = hex.EncodeToString(hash[:])
+		return nil
+	}
+}
+
 type Logger interface {
 	Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
@@ -93,6 +133,7 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 		ssrEnabled:       config.ssrEnabled,
 		ssrEngineFactory: config.ssrEngineFactory,
 		logger:           config.logger,
+		version:          config.version,
 	}
 
 	// Parse root template with bundler's template functions
@@ -207,7 +248,7 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 		if p, ok := value.(Prop); ok {
 			prop = p
 		} else {
-			prop = Prop{Type: propTypeDefault, Value: value}
+			prop = Prop{Type: PropTypeDefault, Value: value}
 		}
 
 		shouldInclude := prop.ShouldInclude(key, headers)
@@ -220,7 +261,7 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 			p.finalProps[key] = val
 		} else {
 			switch prop.Type {
-			case propTypeDeferred:
+			case PropTypeDeferred:
 				group := "default"
 				if prop.Group != "" {
 					group = prop.Group
@@ -229,7 +270,7 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 			}
 		}
 
-		if prop.Type == propTypeOnce {
+		if prop.Type == PropTypeOnce {
 			op := onceProp{Prop: key}
 			if prop.ExpiresAt != nil {
 				op.ExpiresAt = *prop.ExpiresAt
@@ -337,6 +378,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		Component:     component,
 		URL:           r.URL.Path,
 		Props:         p.finalProps,
+		Version:       i.version,
 		DeferredProps: p.deferredProps,
 		OnceProps:     p.onceProps,
 	}

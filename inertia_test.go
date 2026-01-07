@@ -3,6 +3,7 @@ package inertia_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -193,4 +194,132 @@ func TestRender_PartialReload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRender_VersionInPageObject(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler, inertia.WithVersion("test-v1"))
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Inertia", "true")
+	w := httptest.NewRecorder()
+
+	err = i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"})
+	require.NoError(t, err)
+
+	var resp inertia.PageObject
+	err = json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test-v1", resp.Version)
+}
+
+func TestMiddleware_VersionMismatchReturns409(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler, inertia.WithVersion("server-v2"))
+	require.NoError(t, err)
+
+	// Create a handler that should not be called on version mismatch
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := i.Middleware(handler)
+
+	// Request with old version
+	req := httptest.NewRequest("GET", "/test-page", nil)
+	req.Header.Set("X-Inertia", "true")
+	req.Header.Set("X-Inertia-Version", "client-v1") // Mismatched version
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, "/test-page", w.Header().Get("X-Inertia-Location"))
+	assert.False(t, handlerCalled, "handler should not be called on version mismatch")
+}
+
+func TestMiddleware_VersionMatchContinues(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler, inertia.WithVersion("v1"))
+	require.NoError(t, err)
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := i.Middleware(handler)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Inertia", "true")
+	req.Header.Set("X-Inertia-Version", "v1") // Matching version
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled, "handler should be called when versions match")
+}
+
+func TestMiddleware_POSTRequestNoConflict(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler, inertia.WithVersion("v2"))
+	require.NoError(t, err)
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := i.Middleware(handler)
+
+	// POST request with mismatched version should NOT trigger 409
+	req := httptest.NewRequest("POST", "/", nil)
+	req.Header.Set("X-Inertia", "true")
+	req.Header.Set("X-Inertia-Version", "v1") // Mismatched, but POST
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled, "handler should be called for POST requests even with version mismatch")
+}
+
+func TestMiddleware_NonInertiaRequest(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler, inertia.WithVersion("v2"))
+	require.NoError(t, err)
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := i.Middleware(handler)
+
+	// Non-Inertia request (no X-Inertia header)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled, "handler should be called for non-Inertia requests")
 }
