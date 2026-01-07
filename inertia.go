@@ -486,3 +486,14 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 
 	return i.renderHTML(w, r, pageObject)
 }
+
+// Redirect performs a server-side redirect.
+// It automatically uses HTTP 303 (See Other) for PUT, PATCH, and DELETE requests
+// to prevent double form submissions, and 302 (Found) for other methods.
+func (i *Inertia) Redirect(w http.ResponseWriter, r *http.Request, url string) {
+	status := http.StatusFound
+	if r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete {
+		status = http.StatusSeeOther
+	}
+	http.Redirect(w, r, url, status)
+}
