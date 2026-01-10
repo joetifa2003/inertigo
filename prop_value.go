@@ -11,12 +11,12 @@ func Value(value any) Prop {
 	return valueProp{value: value}
 }
 
-func (p valueProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p valueProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return defaultShouldInclude(key, headers)
 }
 
-func (p valueProp) Resolve(ctx context.Context) (any, error) {
+func (p valueProp) resolve(ctx context.Context) (any, error) {
 	return p.value, nil
 }
 
-func (p valueProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}
+func (p valueProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}

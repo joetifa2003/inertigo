@@ -13,12 +13,12 @@ func Always(value any) Prop {
 	return alwaysProp{value: value}
 }
 
-func (p alwaysProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p alwaysProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return true
 }
 
-func (p alwaysProp) Resolve(ctx context.Context) (any, error) {
+func (p alwaysProp) resolve(ctx context.Context) (any, error) {
 	return p.value, nil
 }
 
-func (p alwaysProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}
+func (p alwaysProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}

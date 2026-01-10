@@ -10,16 +10,16 @@ type PropFunc func(ctx context.Context) (any, error)
 
 // Prop is the interface that all prop types must implement.
 type Prop interface {
-	// ShouldInclude determines if the prop should be included in the response
+	// shouldInclude determines if the prop should be included in the response
 	// based on the request headers and partial reload state.
-	ShouldInclude(key string, headers *inertiaHeaders) bool
+	shouldInclude(key string, headers *inertiaHeaders) bool
 
-	// Resolve executes the prop's resolver or returns its static value.
-	Resolve(ctx context.Context) (any, error)
+	// resolve executes the prop's resolver or returns its static value.
+	resolve(ctx context.Context) (any, error)
 
-	// ModifyProcessedProps allows the prop to modify the processed props
+	// modifyProcessedProps allows the prop to modify the processed props
 	// (e.g., adding to deferredProps, onceProps, scrollProps, etc.)
-	ModifyProcessedProps(key string, headers *inertiaHeaders, p *processedProps)
+	modifyProcessedProps(key string, headers *inertiaHeaders, p *processedProps)
 }
 
 // Props is a map of prop names to values.

@@ -286,22 +286,24 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 		}
 	}
 
+	// if we have any error, wrap it back in an errorsProp
 	if existingErrorsMap != nil {
 		props["errors"] = Errors(existingErrorsMap)
 	}
 
 	for key, prop := range props {
-		if prop.ShouldInclude(key, headers) {
-			resolved, err := prop.Resolve(ctx)
+		if prop.shouldInclude(key, headers) {
+			resolved, err := prop.resolve(ctx)
 			if err != nil {
 				return p, err
 			}
 			p.finalProps[key] = resolved
 		}
 
-		prop.ModifyProcessedProps(key, headers, &p)
+		prop.modifyProcessedProps(key, headers, &p)
 	}
 
+	// if there were no errors at all, set it to an empty object
 	if p.finalProps["errors"] == nil {
 		p.finalProps["errors"] = emptyJsonObject
 	}
@@ -460,7 +462,6 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		props = Props{}
 	}
 
-	// Apply render options
 	config := &renderConfig{}
 	for _, opt := range options {
 		opt(config)

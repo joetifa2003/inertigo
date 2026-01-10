@@ -15,12 +15,12 @@ func Lazy(resolver PropFunc) Prop {
 	return &lazyProp{resolver: resolver}
 }
 
-func (p lazyProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p lazyProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return defaultShouldInclude(key, headers)
 }
 
-func (p lazyProp) Resolve(ctx context.Context) (any, error) {
+func (p lazyProp) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p lazyProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}
+func (p lazyProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}

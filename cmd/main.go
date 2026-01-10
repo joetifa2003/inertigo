@@ -11,6 +11,7 @@ import (
 	"time"
 
 	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/qjs"
 	"github.com/joetifa2003/inertigo/vite"
 )
 
@@ -30,9 +31,9 @@ func main() {
 		inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil))),
 		inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
 		inertia.WithSSR(true, func() (inertia.SSREngine, error) {
-			return inertia.NewQJSEngine(
-				inertia.WithSrcPath("assets/dist/server/ssr.js"),
-				inertia.WithClusterSize(16),
+			return qjs.New(
+				qjs.WithSrcPath("assets/dist/server/ssr.js"),
+				qjs.WithClusterSize(16),
 			)
 		}),
 	)

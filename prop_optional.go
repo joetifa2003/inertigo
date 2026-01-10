@@ -16,7 +16,7 @@ func Optional(resolver PropFunc) Prop {
 	return optionalProp{resolver: resolver}
 }
 
-func (p optionalProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p optionalProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	if headers.IsPartial && len(headers.PartialData) > 0 {
 		if slices.Contains(headers.PartialData, key) {
 			return true
@@ -28,8 +28,8 @@ func (p optionalProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
 	return false
 }
 
-func (p optionalProp) Resolve(ctx context.Context) (any, error) {
+func (p optionalProp) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p optionalProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}
+func (p optionalProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}

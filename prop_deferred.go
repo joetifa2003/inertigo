@@ -23,7 +23,7 @@ func DeferredGroup(group string, resolver PropFunc) Prop {
 	return deferredProp{resolver: resolver, group: group}
 }
 
-func (p deferredProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p deferredProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	// Only include if explicitly requested in partial reload
 	if headers.IsPartial && len(headers.PartialData) > 0 {
 		return slices.Contains(headers.PartialData, key)
@@ -31,12 +31,12 @@ func (p deferredProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
 	return false
 }
 
-func (p deferredProp) Resolve(ctx context.Context) (any, error) {
+func (p deferredProp) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p deferredProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
-	if p.ShouldInclude(key, headers) {
+func (p deferredProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+	if p.shouldInclude(key, headers) {
 		return
 	}
 	group := p.group

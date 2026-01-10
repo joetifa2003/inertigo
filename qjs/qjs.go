@@ -1,4 +1,4 @@
-package inertia
+package qjs
 
 import (
 	"io"
@@ -6,46 +6,48 @@ import (
 	"os"
 
 	"github.com/fastschema/qjs"
+
+	inertia "github.com/joetifa2003/inertigo"
 )
 
-type QJSEngine struct {
+type Engine struct {
 	pool *qjs.Pool
 }
 
-type QJSConfig struct {
-	Source string
-	Size   int
+type config struct {
+	source string
+	size   int
 }
 
-type QJSOption func(config *QJSConfig) error
+type Option func(config *config) error
 
-func WithClusterSize(size int) QJSOption {
-	return func(config *QJSConfig) error {
-		config.Size = size
+func WithClusterSize(size int) Option {
+	return func(config *config) error {
+		config.size = size
 		return nil
 	}
 }
 
-func WithSrc(source string) QJSOption {
-	return func(config *QJSConfig) error {
-		config.Source = source
+func WithSrc(source string) Option {
+	return func(config *config) error {
+		config.source = source
 		return nil
 	}
 }
 
-func WithSrcPath(path string) QJSOption {
-	return func(config *QJSConfig) error {
+func WithSrcPath(path string) Option {
+	return func(config *config) error {
 		srcBytes, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		config.Source = string(srcBytes)
+		config.source = string(srcBytes)
 		return nil
 	}
 }
 
-func WithSrcFS(fs fs.FS, path string) QJSOption {
-	return func(config *QJSConfig) error {
+func WithSrcFS(fs fs.FS, path string) Option {
+	return func(config *config) error {
 		f, err := fs.Open(path)
 		if err != nil {
 			return err
@@ -57,14 +59,14 @@ func WithSrcFS(fs fs.FS, path string) QJSOption {
 			return err
 		}
 
-		config.Source = string(srcBytes)
+		config.source = string(srcBytes)
 		return nil
 	}
 }
 
-func NewQJSEngine(options ...QJSOption) (*QJSEngine, error) {
-	config := QJSConfig{
-		Size: 1,
+func New(options ...Option) (*Engine, error) {
+	config := config{
+		size: 1,
 	}
 
 	for _, option := range options {
@@ -80,12 +82,12 @@ func NewQJSEngine(options ...QJSOption) (*QJSEngine, error) {
 	}
 	defer tempRt.Close()
 
-	byteCode, err := tempRt.Context().Compile("ssr.js", qjs.Code(config.Source), qjs.TypeModule())
+	byteCode, err := tempRt.Context().Compile("ssr.js", qjs.Code(config.source), qjs.TypeModule())
 	if err != nil {
 		return nil, err
 	}
 
-	pool := qjs.NewPool(config.Size, qjs.Option{}, func(r *qjs.Runtime) error {
+	pool := qjs.NewPool(config.size, qjs.Option{}, func(r *qjs.Runtime) error {
 		ctx := r.Context()
 
 		val, err := ctx.Eval("polyfill_url.js", qjs.Code(`'use strict';(function(r){function x(){}function y(){}var z=String.fromCharCode,v={}.toString,A=v.call(r.SharedArrayBuffer),B=v(),q=r.Uint8Array,t=q||Array,w=q?ArrayBuffer:t,C=w.isView||function(g){return g&&"length"in g},D=v.call(w.prototype);w=y.prototype;var E=r.TextEncoder,a=new (q?Uint16Array:t)(32);x.prototype.decode=function(g){if(!C(g)){var l=v.call(g);if(l!==D&&l!==A&&l!==B)throw TypeError("Failed to execute 'decode' on 'TextDecoder': The provided value is not of type '(ArrayBuffer or ArrayBufferView)'");
@@ -114,17 +116,17 @@ f.subarray(0,c):f.slice(0,c)};E||(r.TextDecoder=x,r.TextEncoder=y)})(""+void 0==
 		return nil
 	})
 
-	return &QJSEngine{
+	return &Engine{
 		pool: pool,
 	}, nil
 }
 
-func (q *QJSEngine) Name() string { return "qjs" }
+func (q *Engine) Name() string { return "qjs" }
 
-func (q *QJSEngine) Render(page PageObject) (RenderedPage, error) {
+func (q *Engine) Render(page inertia.PageObject) (inertia.RenderedPage, error) {
 	rt, err := q.pool.Get()
 	if err != nil {
-		return RenderedPage{}, err
+		return inertia.RenderedPage{}, err
 	}
 	defer q.pool.Put(rt)
 
@@ -132,7 +134,7 @@ func (q *QJSEngine) Render(page PageObject) (RenderedPage, error) {
 
 	input, err := qjs.ToJsValue(ctx, page)
 	if err != nil {
-		return RenderedPage{}, err
+		return inertia.RenderedPage{}, err
 	}
 	defer input.Free()
 
@@ -141,18 +143,18 @@ func (q *QJSEngine) Render(page PageObject) (RenderedPage, error) {
 
 	res, err := ctx.Invoke(renderPage, ctx.Global(), input)
 	if err != nil {
-		return RenderedPage{}, err
+		return inertia.RenderedPage{}, err
 	}
 
 	res, err = res.Await()
 	if err != nil {
-		return RenderedPage{}, err
+		return inertia.RenderedPage{}, err
 	}
 	defer res.Free()
 
-	p, err := qjs.ToGoValue[RenderedPage](res)
+	p, err := qjs.ToGoValue[inertia.RenderedPage](res)
 	if err != nil {
-		return RenderedPage{}, err
+		return inertia.RenderedPage{}, err
 	}
 	defer res.Free()
 

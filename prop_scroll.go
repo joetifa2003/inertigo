@@ -72,16 +72,16 @@ func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...Scro
 	return sp
 }
 
-func (p scrollProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p scrollProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return defaultShouldInclude(key, headers)
 }
 
-func (p scrollProp) Resolve(ctx context.Context) (any, error) {
+func (p scrollProp) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p scrollProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
-	if !p.ShouldInclude(key, headers) {
+func (p scrollProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+	if !p.shouldInclude(key, headers) {
 		return
 	}
 

@@ -26,18 +26,18 @@ func OnceWithExpiration(resolver PropFunc, expiration time.Duration) Prop {
 	return &onceProp{resolver: resolver, expiresAt: &expiresAt}
 }
 
-func (p onceProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+func (p onceProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	if len(headers.ExceptOnceProps) > 0 && slices.Contains(headers.ExceptOnceProps, key) {
 		return false
 	}
 	return true
 }
 
-func (p onceProp) Resolve(ctx context.Context) (any, error) {
+func (p onceProp) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p onceProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+func (p onceProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
 	data := oncePropData{Prop: key}
 	if p.expiresAt != nil {
 		data.ExpiresAt = *p.expiresAt
