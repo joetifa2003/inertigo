@@ -1,8 +1,7 @@
-import { Deferred, Link } from "@inertiajs/react";
-import { useState } from "react";
+import { Deferred, Link, useRemember } from "@inertiajs/react";
 
 export default function Index(props) {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useRemember(0);
 
   return (
     <div>

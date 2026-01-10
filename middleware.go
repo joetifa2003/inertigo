@@ -27,9 +27,9 @@ func (i *Inertia) Middleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodGet &&
 			r.Header.Get(XInertia) == "true" &&
 			i.version != "" {
-			clientVersion := r.Header.Get("X-Inertia-Version")
+			clientVersion := r.Header.Get(XInertiaVersion)
 			if clientVersion != "" && clientVersion != i.version {
-				w.Header().Set("X-Inertia-Location", r.URL.String())
+				w.Header().Set(XInertiaLocation, r.URL.String())
 				w.WriteHeader(http.StatusConflict)
 				return
 			}

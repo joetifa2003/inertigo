@@ -330,6 +330,7 @@ func (i *Inertia) renderJSON(w http.ResponseWriter, r *http.Request, page *PageO
 
 	w.Header().Set(XInertia, "true")
 	w.Header().Set("Vary", XInertia)
+	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(page)
 }
 
@@ -382,6 +383,7 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 		InertiaBody: template.HTML(body),
 	}
 
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return i.rootTemplate.Execute(w, view)
 }
 

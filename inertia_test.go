@@ -35,7 +35,7 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Full Load",
 			headers: map[string]string{
-				"X-Inertia": "true",
+				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -46,9 +46,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Partial Reload - Select One",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Data":      "foo",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialData:      "foo",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -60,9 +60,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Partial Reload - Select multiple",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Data":      "foo,baz",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialData:      "foo,baz",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -73,9 +73,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Partial Reload - Except One",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Except":    "foo",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialExcept:    "foo",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -87,7 +87,7 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Deferred Prop - Initial Load",
 			headers: map[string]string{
-				"X-Inertia": "true",
+				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -99,9 +99,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Deferred Prop - Partial Load Requested",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Data":      "def",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialData:      "def",
 			},
 			props: inertia.Props{
 				"foo": "bar",
@@ -113,7 +113,7 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Optional Prop - Initial Load (Excluded)",
 			headers: map[string]string{
-				"X-Inertia": "true",
+				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
 				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
@@ -124,9 +124,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Optional Prop - Partial Load Requested",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Data":      "opt",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialData:      "opt",
 			},
 			props: inertia.Props{
 				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
@@ -136,9 +136,9 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Always Prop - Partial Load (Not Requested)",
 			headers: map[string]string{
-				"X-Inertia":                   "true",
-				"X-Inertia-Partial-Component": "TestComponent",
-				"X-Inertia-Partial-Data":      "other",
+				inertia.XInertia:                 "true",
+				inertia.XInertiaPartialComponent: "TestComponent",
+				inertia.XInertiaPartialData:      "other",
 			},
 			props: inertia.Props{
 				"alw":   inertia.Always("always"),
@@ -149,7 +149,7 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Once Prop - Initial Load",
 			headers: map[string]string{
-				"X-Inertia": "true",
+				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
 				"onc": inertia.Once(func(ctx context.Context) (any, error) { return "once", nil }),
@@ -159,7 +159,7 @@ func TestRender_PartialReload(t *testing.T) {
 		{
 			name: "Once Prop With Expiration",
 			headers: map[string]string{
-				"X-Inertia": "true",
+				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
 				"onc_exp": inertia.OnceWithExpiration(func(ctx context.Context) (any, error) { return "once_exp", nil }, 1*time.Hour),
@@ -204,7 +204,7 @@ func TestRender_VersionInPageObject(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Inertia", "true")
+	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
 	err = i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"})
@@ -235,14 +235,14 @@ func TestMiddleware_VersionMismatchReturns409(t *testing.T) {
 
 	// Request with old version
 	req := httptest.NewRequest("GET", "/test-page", nil)
-	req.Header.Set("X-Inertia", "true")
-	req.Header.Set("X-Inertia-Version", "client-v1") // Mismatched version
+	req.Header.Set(inertia.XInertia, "true")
+	req.Header.Set(inertia.XInertiaVersion, "client-v1") // Mismatched version
 	w := httptest.NewRecorder()
 
 	middleware.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
-	assert.Equal(t, "/test-page", w.Header().Get("X-Inertia-Location"))
+	assert.Equal(t, "/test-page", w.Header().Get(inertia.XInertiaLocation))
 	assert.False(t, handlerCalled, "handler should not be called on version mismatch")
 }
 
@@ -262,8 +262,8 @@ func TestMiddleware_VersionMatchContinues(t *testing.T) {
 	middleware := i.Middleware(handler)
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Inertia", "true")
-	req.Header.Set("X-Inertia-Version", "v1") // Matching version
+	req.Header.Set(inertia.XInertia, "true")
+	req.Header.Set(inertia.XInertiaVersion, "v1") // Matching version
 	w := httptest.NewRecorder()
 
 	middleware.ServeHTTP(w, req)
@@ -289,8 +289,8 @@ func TestMiddleware_POSTRequestNoConflict(t *testing.T) {
 
 	// POST request with mismatched version should NOT trigger 409
 	req := httptest.NewRequest("POST", "/", nil)
-	req.Header.Set("X-Inertia", "true")
-	req.Header.Set("X-Inertia-Version", "v1") // Mismatched, but POST
+	req.Header.Set(inertia.XInertia, "true")
+	req.Header.Set(inertia.XInertiaVersion, "v1") // Mismatched, but POST
 	w := httptest.NewRecorder()
 
 	middleware.ServeHTTP(w, req)
@@ -356,7 +356,7 @@ func TestRender_EncryptHistoryOption(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
-			req.Header.Set("X-Inertia", "true")
+			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
 			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
@@ -403,7 +403,7 @@ func TestRender_ClearHistoryOption(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
-			req.Header.Set("X-Inertia", "true")
+			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
 			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
@@ -479,7 +479,7 @@ func TestRender_MergePropsOptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
-			req.Header.Set("X-Inertia", "true")
+			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
 			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
@@ -505,7 +505,7 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Inertia", "true")
+	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
 	// Test that all options can be used together
@@ -540,18 +540,18 @@ func TestRenderErrors(t *testing.T) {
 
 	t.Run("Precognition Success (No Errors)", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/", nil)
-		req.Header.Set("Precognition", "true")
+		req.Header.Set(inertia.HeaderPrecognition, "true")
 		w := httptest.NewRecorder()
 
 		err := i.RenderErrors(w, req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		assert.Equal(t, "true", w.Header().Get("Precognition-Success"))
+		assert.Equal(t, "true", w.Header().Get(inertia.HeaderPrecognitionSuccess))
 	})
 
 	t.Run("Precognition Error (With Errors)", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/", nil)
-		req.Header.Set("Precognition", "true")
+		req.Header.Set(inertia.HeaderPrecognition, "true")
 		w := httptest.NewRecorder()
 
 		errors := map[string]any{"field": "error"}
@@ -623,7 +623,7 @@ func TestValidationErrors_FullFlow(t *testing.T) {
 
 		// Step 2: Simulate the redirected GET request through middleware
 		getReq := httptest.NewRequest("GET", "/register", nil)
-		getReq.Header.Set("X-Inertia", "true")
+		getReq.Header.Set(inertia.XInertia, "true")
 		for _, c := range cookies {
 			getReq.AddCookie(c)
 		}
@@ -649,7 +649,7 @@ func TestValidationErrors_FullFlow(t *testing.T) {
 
 		// Step 3: Errors should be cleared on next request (flash behavior)
 		getReq2 := httptest.NewRequest("GET", "/register", nil)
-		getReq2.Header.Set("X-Inertia", "true")
+		getReq2.Header.Set(inertia.XInertia, "true")
 		for _, c := range cookies {
 			getReq2.AddCookie(c)
 		}
@@ -670,7 +670,7 @@ func TestValidationErrors_FullFlow(t *testing.T) {
 		// Step 1: Simulate a POST with Error Bag header
 		postReq := httptest.NewRequest("POST", "/login", nil)
 		postReq.Header.Set("Referer", "/login")
-		postReq.Header.Set("X-Inertia-Error-Bag", "loginBag")
+		postReq.Header.Set(inertia.XInertiaErrorBag, "loginBag")
 		postW := httptest.NewRecorder()
 
 		errors := map[string]any{"email": "Invalid credentials"}
@@ -682,7 +682,7 @@ func TestValidationErrors_FullFlow(t *testing.T) {
 
 		// Step 2: Simulate the redirected GET request
 		getReq := httptest.NewRequest("GET", "/login", nil)
-		getReq.Header.Set("X-Inertia", "true")
+		getReq.Header.Set(inertia.XInertia, "true")
 		for _, c := range cookies {
 			getReq.AddCookie(c)
 		}

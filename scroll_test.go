@@ -49,7 +49,7 @@ func TestRender_WithScrollProp_PopulatesScrollProps(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/posts?page=1", nil)
-	req.Header.Set("X-Inertia", "true")
+	req.Header.Set(inertia.XInertia, "true")
 
 	rec := httptest.NewRecorder()
 
@@ -97,8 +97,8 @@ func TestRender_WithScrollProp_PrependMergeIntent(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/messages?page=2", nil)
-	req.Header.Set("X-Inertia", "true")
-	req.Header.Set("X-Inertia-Infinite-Scroll-Merge-Intent", "prepend")
+	req.Header.Set(inertia.XInertia, "true")
+	req.Header.Set(inertia.XInertiaInfiniteScrollMergeIntent, "prepend")
 
 	rec := httptest.NewRecorder()
 
@@ -129,7 +129,7 @@ func TestRender_WithMultipleScrollProps(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
-	req.Header.Set("X-Inertia", "true")
+	req.Header.Set(inertia.XInertia, "true")
 
 	rec := httptest.NewRecorder()
 
@@ -168,7 +168,7 @@ func TestRender_WithScrollPropAndRegularProps(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/posts", nil)
-	req.Header.Set("X-Inertia", "true")
+	req.Header.Set(inertia.XInertia, "true")
 
 	rec := httptest.NewRecorder()
 
