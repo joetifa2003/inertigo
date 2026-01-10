@@ -44,7 +44,7 @@ func main() {
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		err = i.Render(w, r, "index", inertia.Props{
-			"title": "Hello, world!",
+			"title": inertia.Value("Hello, world!"),
 			"lazyMessage": inertia.Deferred(func(ctx context.Context) (any, error) {
 				time.Sleep(1 * time.Second)
 				return "This message is lazy loaded", nil

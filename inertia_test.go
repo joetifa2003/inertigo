@@ -38,8 +38,8 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
-				"foo": "bar",
-				"baz": "qux",
+				"foo": inertia.Value("bar"),
+				"baz": inertia.Value("qux"),
 			},
 			expectedProps: []string{"foo", "baz", "errors"},
 		},
@@ -51,10 +51,10 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialData:      "foo",
 			},
 			props: inertia.Props{
-				"foo": "bar",
-				"baz": "qux",
+				"foo": inertia.Value("bar"),
+				"baz": inertia.Value("qux"),
 			},
-			expectedProps:   []string{"foo", "errors"},
+			expectedProps:   []string{"foo"},
 			unexpectedProps: []string{"baz"},
 		},
 		{
@@ -65,10 +65,10 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialData:      "foo,baz",
 			},
 			props: inertia.Props{
-				"foo": "bar",
-				"baz": "qux",
+				"foo": inertia.Value("bar"),
+				"baz": inertia.Value("qux"),
 			},
-			expectedProps: []string{"foo", "baz", "errors"},
+			expectedProps: []string{"foo", "baz"},
 		},
 		{
 			name: "Partial Reload - Except One",
@@ -78,8 +78,8 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialExcept:    "foo",
 			},
 			props: inertia.Props{
-				"foo": "bar",
-				"baz": "qux",
+				"foo": inertia.Value("bar"),
+				"baz": inertia.Value("qux"),
 			},
 			expectedProps:   []string{"baz", "errors"},
 			unexpectedProps: []string{"foo"},
@@ -90,7 +90,7 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
-				"foo": "bar",
+				"foo": inertia.Value("bar"),
 				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
 			},
 			expectedProps:   []string{"foo", "errors"},
@@ -104,10 +104,10 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialData:      "def",
 			},
 			props: inertia.Props{
-				"foo": "bar",
+				"foo": inertia.Value("bar"),
 				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
 			},
-			expectedProps:   []string{"def", "errors"},
+			expectedProps:   []string{"def"},
 			unexpectedProps: []string{"foo"},
 		},
 		{
@@ -131,7 +131,7 @@ func TestRender_PartialReload(t *testing.T) {
 			props: inertia.Props{
 				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
 			},
-			expectedProps: []string{"opt", "errors"},
+			expectedProps: []string{"opt"},
 		},
 		{
 			name: "Always Prop - Partial Load (Not Requested)",
@@ -142,9 +142,9 @@ func TestRender_PartialReload(t *testing.T) {
 			},
 			props: inertia.Props{
 				"alw":   inertia.Always("always"),
-				"other": "other",
+				"other": inertia.Value("other"),
 			},
-			expectedProps: []string{"alw", "other", "errors"},
+			expectedProps: []string{"alw", "other"},
 		},
 		{
 			name: "Once Prop - Initial Load",
@@ -207,7 +207,7 @@ func TestRender_VersionInPageObject(t *testing.T) {
 	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
-	err = i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"})
+	err = i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")})
 	require.NoError(t, err)
 
 	var resp inertia.PageObject
@@ -359,7 +359,7 @@ func TestRender_EncryptHistoryOption(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
@@ -406,7 +406,7 @@ func TestRender_ClearHistoryOption(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
@@ -482,7 +482,7 @@ func TestRender_MergePropsOptions(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": "bar"}, tt.options...)
+			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
@@ -509,7 +509,7 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Test that all options can be used together
-	err = i.Render(w, req, "TestComponent", inertia.Props{"data": "value"},
+	err = i.Render(w, req, "TestComponent", inertia.Props{"data": inertia.Value("value")},
 		inertia.WithEncryptHistory(true),
 		inertia.WithClearHistory(true),
 		inertia.WithMergeProps("items"),
@@ -750,7 +750,7 @@ func TestRender_LazyProp(t *testing.T) {
 			"users": inertia.Lazy(func(ctx context.Context) (any, error) {
 				return []string{"user1", "user2"}, nil
 			}),
-			"other": "data",
+			"other": inertia.Value("data"),
 		})
 		require.NoError(t, err)
 
@@ -925,34 +925,6 @@ func TestRender_ScrollProp(t *testing.T) {
 		assert.Equal(t, "eyJpZCI6MTV9", scrollMeta.NextPage)
 	})
 
-	t.Run("ScrollProp with metadataFunc", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set(inertia.XInertia, "true")
-		w := httptest.NewRecorder()
-
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
-				return []string{"post1", "post2", "post3"}, nil
-			}, inertia.WithScrollMetadataFunc(func(value any) *inertia.ScrollMetadata {
-				// Derive metadata from resolved value
-				data := value.(map[string]any)["data"].([]string)
-				return &inertia.ScrollMetadata{
-					PageName:    "page",
-					CurrentPage: 1,
-					NextPage:    len(data), // Use length as next page for demo
-				}
-			})),
-		})
-		require.NoError(t, err)
-
-		var resp inertia.PageObject
-		err = json.NewDecoder(w.Body).Decode(&resp)
-		require.NoError(t, err)
-
-		scrollMeta := resp.ScrollProps["posts"]
-		assert.Equal(t, float64(3), scrollMeta.NextPage)
-	})
-
 	t.Run("ScrollProp not resolved on partial reload when not requested", func(t *testing.T) {
 		resolverCalled := false
 		req := httptest.NewRequest("GET", "/", nil)
@@ -962,7 +934,7 @@ func TestRender_ScrollProp(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"foo": "bar",
+			"foo": inertia.Value("bar"),
 			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				resolverCalled = true
 				return []string{"post1"}, nil
@@ -995,7 +967,7 @@ func TestRender_ScrollProp(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"foo": "bar",
+			"foo": inertia.Value("bar"),
 			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				resolverCalled = true
 				return []string{"post1"}, nil

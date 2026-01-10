@@ -1,6 +1,9 @@
 package inertia
 
-import "context"
+import (
+	"context"
+	"slices"
+)
 
 // ScrollMetadata provides pagination metadata for infinite scrolling.
 type ScrollMetadata struct {
@@ -10,36 +13,27 @@ type ScrollMetadata struct {
 	CurrentPage  any    // int or string (for cursor pagination)
 }
 
-// ScrollProp represents a paginated property for infinite scrolling.
-// Use the generic Scroll[T] constructor to create instances.
-type ScrollProp struct {
-	resolver     PropFunc
-	wrapper      string
-	metadata     *ScrollMetadata
-	metadataFunc func(value any) *ScrollMetadata
+// scrollProp represents a paginated property for infinite scrolling.
+type scrollProp struct {
+	resolver PropFunc
+	wrapper  string
+	metadata *ScrollMetadata
 }
 
 // ScrollOption configures ScrollProp creation.
-type ScrollOption func(*ScrollProp)
+type ScrollOption func(*scrollProp)
 
 // WithWrapper sets the data wrapper key path (default: "data").
 func WithWrapper(wrapper string) ScrollOption {
-	return func(s *ScrollProp) {
+	return func(s *scrollProp) {
 		s.wrapper = wrapper
 	}
 }
 
 // WithScrollMetadata sets static scroll metadata.
 func WithScrollMetadata(metadata ScrollMetadata) ScrollOption {
-	return func(s *ScrollProp) {
+	return func(s *scrollProp) {
 		s.metadata = &metadata
-	}
-}
-
-// WithScrollMetadataFunc sets a function to derive metadata from the resolved value.
-func WithScrollMetadataFunc(fn func(value any) *ScrollMetadata) ScrollOption {
-	return func(s *ScrollProp) {
-		s.metadataFunc = fn
 	}
 }
 
@@ -58,8 +52,8 @@ func WithScrollMetadataFunc(fn func(value any) *ScrollMetadata) ScrollOption {
 //
 // This produces response: {"posts": {"data": [...]}}
 // With merge path: "posts.data"
-func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...ScrollOption) ScrollProp {
-	sp := ScrollProp{
+func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...ScrollOption) Prop {
+	sp := scrollProp{
 		wrapper: "data",
 	}
 	for _, opt := range opts {
@@ -78,24 +72,39 @@ func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...Scro
 	return sp
 }
 
-// Resolve executes the resolver (lazy evaluation).
-func (s *ScrollProp) Resolve(ctx context.Context) (any, error) {
-	return s.resolver(ctx)
+func (p scrollProp) ShouldInclude(key string, headers *inertiaHeaders) bool {
+	return defaultShouldInclude(key, headers)
 }
 
-// GetMetadata returns the scroll metadata for this prop.
-func (s *ScrollProp) GetMetadata(resolvedValue any) *ScrollMetadata {
-	if s.metadataFunc != nil {
-		return s.metadataFunc(resolvedValue)
+func (p scrollProp) Resolve(ctx context.Context) (any, error) {
+	return p.resolver(ctx)
+}
+
+func (p scrollProp) ModifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+	if !p.ShouldInclude(key, headers) {
+		return
 	}
-	if s.metadata != nil {
-		return s.metadata
+
+	meta := p.getMetadata()
+	pp.scrollProps[key] = scrollPropMetadata{
+		PageName:     meta.PageName,
+		PreviousPage: meta.PreviousPage,
+		NextPage:     meta.NextPage,
+		CurrentPage:  meta.CurrentPage,
+		Reset:        slices.Contains(headers.ResetProps, key),
 	}
-	// Return default metadata if none provided
+
+	mergePath := key + "." + p.wrapper
+	if headers.InfiniteScrollMerge == "prepend" {
+		pp.prependProps = append(pp.prependProps, mergePath)
+	} else {
+		pp.mergeProps = append(pp.mergeProps, mergePath)
+	}
+}
+
+func (p *scrollProp) getMetadata() *ScrollMetadata {
+	if p.metadata != nil {
+		return p.metadata
+	}
 	return &ScrollMetadata{PageName: "page"}
-}
-
-// GetWrapper returns the wrapper key path.
-func (s *ScrollProp) GetWrapper() string {
-	return s.wrapper
 }

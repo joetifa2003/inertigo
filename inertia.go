@@ -233,9 +233,9 @@ func (i *Inertia) Logger() Logger {
 }
 
 type processedProps struct {
-	finalProps    Props
+	finalProps    map[string]any
 	deferredProps map[string][]string
-	onceProps     map[string]onceProp
+	onceProps     map[string]oncePropData
 	scrollProps   map[string]scrollPropMetadata
 	mergeProps    []string // Prop paths to merge on navigation
 	prependProps  []string // Prop paths to prepend on navigation
@@ -243,9 +243,9 @@ type processedProps struct {
 
 func newProcessedProps() processedProps {
 	return processedProps{
-		finalProps:    make(Props),
+		finalProps:    make(map[string]any),
 		deferredProps: make(map[string][]string),
-		onceProps:     make(map[string]onceProp),
+		onceProps:     make(map[string]oncePropData),
 		scrollProps:   make(map[string]scrollPropMetadata),
 	}
 }
@@ -263,89 +263,19 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 	p := processedPropsPool.Get()
 
 	if _, ok := props["errors"]; !ok {
-		props["errors"] = Always(map[string]any{})
+		props["errors"] = Value(map[string]any{})
 	}
 
-	for key, value := range props {
-		// Handle ScrollProp specially (before regular Prop handling)
-		if scrollProp, ok := value.(ScrollProp); ok {
-			// Check if we should include this prop (same logic as default props)
-			shouldInclude := true
-			if headers.IsPartial {
-				if len(headers.PartialData) > 0 {
-					shouldInclude = slices.Contains(headers.PartialData, key)
-				}
-				if len(headers.PartialExcept) > 0 && slices.Contains(headers.PartialExcept, key) {
-					shouldInclude = false
-				}
-			}
-
-			if !shouldInclude {
-				continue // Skip - don't resolve if not requested
-			}
-
-			// Resolve only if included
-			resolved, err := scrollProp.Resolve(ctx)
+	for key, prop := range props {
+		if prop.ShouldInclude(key, headers) {
+			resolved, err := prop.Resolve(ctx)
 			if err != nil {
 				return p, err
 			}
 			p.finalProps[key] = resolved
-
-			// Configure merge behavior based on header
-			wrapper := scrollProp.GetWrapper()
-			mergePath := key + "." + wrapper
-
-			if headers.InfiniteScrollMerge == "prepend" {
-				p.prependProps = append(p.prependProps, mergePath)
-			} else {
-				p.mergeProps = append(p.mergeProps, mergePath)
-			}
-
-			// Collect scroll metadata
-			meta := scrollProp.GetMetadata(resolved)
-			p.scrollProps[key] = scrollPropMetadata{
-				PageName:     meta.PageName,
-				PreviousPage: meta.PreviousPage,
-				NextPage:     meta.NextPage,
-				CurrentPage:  meta.CurrentPage,
-				Reset:        slices.Contains(headers.ResetProps, key),
-			}
-			continue
 		}
 
-		var prop Prop
-		if p, ok := value.(Prop); ok {
-			prop = p
-		} else {
-			prop = Prop{Type: PropTypeDefault, Value: value}
-		}
-
-		shouldInclude := prop.ShouldInclude(key, headers)
-
-		if shouldInclude {
-			val, err := prop.Resolve(ctx)
-			if err != nil {
-				return p, err
-			}
-			p.finalProps[key] = val
-		} else {
-			switch prop.Type {
-			case PropTypeDeferred:
-				group := "default"
-				if prop.Group != "" {
-					group = prop.Group
-				}
-				p.deferredProps[group] = append(p.deferredProps[group], key)
-			}
-		}
-
-		if prop.Type == PropTypeOnce {
-			op := onceProp{Prop: key}
-			if prop.ExpiresAt != nil {
-				op.ExpiresAt = *prop.ExpiresAt
-			}
-			p.onceProps[key] = op
-		}
+		prop.ModifyProcessedProps(key, headers, &p)
 	}
 
 	return p, nil
@@ -420,7 +350,7 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 type PageObject struct {
 	Component      string                        `json:"component"`
 	URL            string                        `json:"url"`
-	Props          Props                         `json:"props"`
+	Props          map[string]any                `json:"props"`
 	Version        string                        `json:"version"`
 	EncryptHistory bool                          `json:"encryptHistory"`
 	ClearHistory   bool                          `json:"clearHistory"`
@@ -429,7 +359,7 @@ type PageObject struct {
 	DeepMergeProps []string                      `json:"deepMergeProps"`
 	MatchPropsOn   []string                      `json:"matchPropsOn"`
 	DeferredProps  map[string][]string           `json:"deferredProps"`
-	OnceProps      map[string]onceProp           `json:"onceProps"`
+	OnceProps      map[string]oncePropData       `json:"onceProps"`
 	ScrollProps    map[string]scrollPropMetadata `json:"scrollProps,omitempty"`
 }
 
@@ -504,7 +434,18 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 
 	// Merge flashed validation errors from context (set by Middleware)
 	if errors := r.Context().Value(inertiaErrorsKey); errors != nil {
-		props["errors"] = errors
+		if existingErrors, ok := props["errors"]; ok {
+			switch existingErrors := existingErrors.(type) {
+			case valueProp:
+				if m, ok := existingErrors.value.(map[string]any); ok {
+					for key, value := range errors.(map[string]any) {
+						m[key] = value
+					}
+				}
+			}
+		} else {
+			props["errors"] = Value(errors)
+		}
 	}
 
 	// Apply render options
