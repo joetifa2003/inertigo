@@ -35,6 +35,9 @@ type Inertia struct {
 	ssrInitLock      sync.Mutex
 
 	session Session
+
+	csrfEnabled bool
+	csrfConfig  csrfConfig
 }
 
 type inertiaConfig struct {
@@ -48,6 +51,9 @@ type inertiaConfig struct {
 	version string
 
 	session Session
+
+	csrfEnabled bool
+	csrfConfig  csrfConfig
 }
 
 type InertiaOption func(config *inertiaConfig) error
@@ -125,6 +131,21 @@ func WithSession(session Session) InertiaOption {
 	}
 }
 
+// WithCSRF enables CSRF protection.
+// enabled: whether to enable CSRF protection
+// cookieSecure: set to true for HTTPS-only cookies (recommended for production)
+func WithCSRF(enabled bool, cookieSecure bool) InertiaOption {
+	return func(config *inertiaConfig) error {
+		config.csrfEnabled = enabled
+		if enabled {
+			config.csrfConfig = csrfConfig{
+				cookieSecure: cookieSecure,
+			}
+		}
+		return nil
+	}
+}
+
 type Logger interface {
 	Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
@@ -151,11 +172,12 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 		logger:           config.logger,
 		version:          config.version,
 		session:          config.session,
+		csrfEnabled:      config.csrfEnabled,
+		csrfConfig:       config.csrfConfig,
 	}
 
-	// Default to in-memory session if not provided
 	if i.session == nil {
-		i.session = NewMemorySession()
+		i.session = NewMemorySession("sid")
 	}
 
 	// Parse root template with bundler's template functions

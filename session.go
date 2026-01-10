@@ -22,7 +22,7 @@ type Session interface {
 }
 
 const (
-	defaultSessionCookieName = "inertia_session_id"
+	defaultSessionCookieName = "sid"
 	sessionIDLength          = 32
 )
 
@@ -36,10 +36,10 @@ type MemorySession struct {
 }
 
 // NewMemorySession creates a new in-memory session store.
-func NewMemorySession() *MemorySession {
+func NewMemorySession(cookieName string) *MemorySession {
 	return &MemorySession{
 		store:      make(map[string]map[string]any),
-		cookieName: defaultSessionCookieName,
+		cookieName: cookieName,
 	}
 }
 
@@ -90,7 +90,6 @@ func (m *MemorySession) Get(w http.ResponseWriter, r *http.Request, key string) 
 	return value, nil
 }
 
-// getSessionID retrieves the session ID from the request cookie.
 func (m *MemorySession) getSessionID(r *http.Request) string {
 	cookie, err := r.Cookie(m.cookieName)
 	if err != nil {
@@ -105,10 +104,8 @@ func (m *MemorySession) getOrCreateSessionID(w http.ResponseWriter, r *http.Requ
 		return sessionID
 	}
 
-	// Generate a new session ID
 	sessionID := generateSessionID()
 
-	// Set the session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     m.cookieName,
 		Value:    sessionID,
@@ -121,13 +118,10 @@ func (m *MemorySession) getOrCreateSessionID(w http.ResponseWriter, r *http.Requ
 	return sessionID
 }
 
-// generateSessionID creates a cryptographically secure random session ID.
 func generateSessionID() string {
 	bytes := make([]byte, sessionIDLength)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to a less secure method if crypto/rand fails
-		// This should rarely happen in practice
-		return hex.EncodeToString([]byte(time.Now().String()))
+		panic("impossible, read never returns an error")
 	}
 	return hex.EncodeToString(bytes)
 }

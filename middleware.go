@@ -23,6 +23,23 @@ func (i *Inertia) Middleware(next http.Handler) http.Handler {
 			r = r.WithContext(ctx)
 		}
 
+		// CSRF Protection
+		if i.csrfEnabled {
+			// Only set cookie if we need to create a new token
+			if needsNewCSRFToken(r) {
+				token := generateCSRFToken()
+				setCSRFCookie(w, token, i.csrfConfig)
+			}
+
+			// Validate on state-changing methods
+			if isStateChangingMethod(r.Method) {
+				if !validateCSRF(r) {
+					http.Error(w, "CSRF token mismatch", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
 		// Handle version mismatch on Inertia GET requests
 		if r.Method == http.MethodGet &&
 			r.Header.Get(XInertia) == "true" &&

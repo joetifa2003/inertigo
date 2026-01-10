@@ -36,6 +36,7 @@ func main() {
 				qjs.WithClusterSize(16),
 			)
 		}),
+		inertia.WithCSRF(true, false), // Enable CSRF, cookieSecure=false for development
 	)
 	must(err)
 
