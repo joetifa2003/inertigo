@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	inertia "github.com/joetifa2003/inertigo"
@@ -61,6 +63,68 @@ func main() {
 			slog.Error(err.Error())
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
+		}
+	})
+
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+		err = i.Render(w, r, "register", nil)
+		if err != nil {
+			slog.Error(err.Error())
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	})
+
+	mux.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			var body struct {
+				Name     string `json:"name"`
+				Email    string `json:"email"`
+				Password string `json:"password"`
+			}
+
+			if r.Header.Get("Content-Type") == "application/json" {
+				json.NewDecoder(r.Body).Decode(&body)
+			} else {
+				r.ParseForm()
+				body.Name = r.FormValue("name")
+				body.Email = r.FormValue("email")
+				body.Password = r.FormValue("password")
+			}
+
+			errors := map[string]any{}
+
+			if inertia.ShouldValidateField(r, "name") {
+				if body.Name == "" {
+					errors["name"] = "Name is required"
+				}
+			}
+
+			if inertia.ShouldValidateField(r, "email") {
+				if body.Email == "" {
+					errors["email"] = "Email is required"
+				} else if !strings.Contains(body.Email, "@") {
+					errors["email"] = "Email must contain @"
+				}
+			}
+
+			if inertia.ShouldValidateField(r, "password") {
+				if body.Password == "" {
+					errors["password"] = "Password is required"
+				}
+			}
+
+			err := i.RenderErrors(w, r, errors)
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+
+			if len(errors) != 0 {
+				return
+			}
+
+			i.Redirect(w, r, "/")
 		}
 	})
 

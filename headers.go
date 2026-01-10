@@ -5,9 +5,16 @@ import (
 	"strings"
 )
 
+const (
+	XInertia                       = "X-Inertia"
+	XInertiaErrorBag               = "X-Inertia-Error-Bag"
+	HeaderPrecognition             = "Precognition"
+	HeaderPrecognitionValidateOnly = "Precognition-Validate-Only"
+	HeaderPrecognitionSuccess      = "Precognition-Success"
+)
+
 type inertiaHeaders struct {
 	Component           string
-	Version             string
 	PartialData         []string
 	PartialExcept       []string
 	ExceptOnceProps     []string
@@ -19,7 +26,6 @@ type inertiaHeaders struct {
 func parseInertiaHeaders(r *http.Request, component string) *inertiaHeaders {
 	headers := &inertiaHeaders{
 		Component:           r.Header.Get("X-Inertia-Partial-Component"),
-		Version:             r.Header.Get("X-Inertia-Version"),
 		IsInertia:           r.Header.Get(XInertia) == "true",
 		InfiniteScrollMerge: r.Header.Get("X-Inertia-Infinite-Scroll-Merge-Intent"),
 	}

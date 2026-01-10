@@ -530,3 +530,182 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	assert.Equal(t, []string{"settings"}, resp.DeepMergeProps)
 	assert.Equal(t, []string{"items.id"}, resp.MatchPropsOn)
 }
+
+func TestRenderErrors(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	t.Run("Precognition Success (No Errors)", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.Header.Set("Precognition", "true")
+		w := httptest.NewRecorder()
+
+		err := i.RenderErrors(w, req, nil)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "true", w.Header().Get("Precognition-Success"))
+	})
+
+	t.Run("Precognition Error (With Errors)", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.Header.Set("Precognition", "true")
+		w := httptest.NewRecorder()
+
+		errors := map[string]any{"field": "error"}
+		err := i.RenderErrors(w, req, errors)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+		var body map[string]any
+		json.NewDecoder(w.Body).Decode(&body)
+		assert.Equal(t, "error", body["errors"].(map[string]any)["field"])
+	})
+
+	t.Run("Standard Request (With Errors) - Redirects Back", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/users", nil)
+		req.Header.Set("Referer", "/register")
+		w := httptest.NewRecorder()
+
+		errors := map[string]any{"field": "error"}
+		err := i.RenderErrors(w, req, errors)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, "/register", w.Header().Get("Location"))
+	})
+
+	t.Run("Standard Request (With Errors) - Fallback to root", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/users", nil)
+		// No Referer header
+		w := httptest.NewRecorder()
+
+		errors := map[string]any{"field": "error"}
+		err := i.RenderErrors(w, req, errors)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, "/", w.Header().Get("Location"))
+	})
+
+	t.Run("Standard Request (No Errors)", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		w := httptest.NewRecorder()
+
+		err := i.RenderErrors(w, req, nil)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, 0, w.Body.Len())
+	})
+}
+
+func TestValidationErrors_FullFlow(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	t.Run("Flashed errors are shared via middleware and rendered", func(t *testing.T) {
+		// Step 1: Simulate a POST that triggers validation errors
+		postReq := httptest.NewRequest("POST", "/users", nil)
+		postReq.Header.Set("Referer", "/register")
+		postW := httptest.NewRecorder()
+
+		errors := map[string]any{"email": "Email is required"}
+		err := i.RenderErrors(postW, postReq, errors)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusFound, postW.Code)
+
+		// Extract the session cookie
+		cookies := postW.Result().Cookies()
+		require.NotEmpty(t, cookies)
+
+		// Step 2: Simulate the redirected GET request through middleware
+		getReq := httptest.NewRequest("GET", "/register", nil)
+		getReq.Header.Set("X-Inertia", "true")
+		for _, c := range cookies {
+			getReq.AddCookie(c)
+		}
+		getW := httptest.NewRecorder()
+
+		// Create a handler that renders
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			err := i.Render(w, r, "register", nil)
+			require.NoError(t, err)
+		})
+
+		// Wrap with middleware
+		i.Middleware(handler).ServeHTTP(getW, getReq)
+
+		// Verify the response includes the errors
+		assert.Equal(t, http.StatusOK, getW.Code)
+		var resp inertia.PageObject
+		json.NewDecoder(getW.Body).Decode(&resp)
+		assert.Equal(t, "register", resp.Component)
+		assert.NotNil(t, resp.Props["errors"])
+		errorsMap := resp.Props["errors"].(map[string]any)
+		assert.Equal(t, "Email is required", errorsMap["email"])
+
+		// Step 3: Errors should be cleared on next request (flash behavior)
+		getReq2 := httptest.NewRequest("GET", "/register", nil)
+		getReq2.Header.Set("X-Inertia", "true")
+		for _, c := range cookies {
+			getReq2.AddCookie(c)
+		}
+		getW2 := httptest.NewRecorder()
+
+		i.Middleware(handler).ServeHTTP(getW2, getReq2)
+
+		var resp2 inertia.PageObject
+		json.NewDecoder(getW2.Body).Decode(&resp2)
+		// On second request, errors should be empty (flash is consumed on first request)
+		// Note: errors prop is always included per Inertia protocol, but should be empty
+		errorsMap2, ok := resp2.Props["errors"].(map[string]any)
+		assert.True(t, ok, "errors should be a map")
+		assert.Empty(t, errorsMap2, "errors should be empty on second request")
+	})
+
+	t.Run("Error Bags are respected", func(t *testing.T) {
+		// Step 1: Simulate a POST with Error Bag header
+		postReq := httptest.NewRequest("POST", "/login", nil)
+		postReq.Header.Set("Referer", "/login")
+		postReq.Header.Set("X-Inertia-Error-Bag", "loginBag")
+		postW := httptest.NewRecorder()
+
+		errors := map[string]any{"email": "Invalid credentials"}
+		err := i.RenderErrors(postW, postReq, errors)
+		require.NoError(t, err)
+
+		// Extract cookies
+		cookies := postW.Result().Cookies()
+
+		// Step 2: Simulate the redirected GET request
+		getReq := httptest.NewRequest("GET", "/login", nil)
+		getReq.Header.Set("X-Inertia", "true")
+		for _, c := range cookies {
+			getReq.AddCookie(c)
+		}
+		getW := httptest.NewRecorder()
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			err := i.Render(w, r, "login", nil)
+			require.NoError(t, err)
+		})
+
+		i.Middleware(handler).ServeHTTP(getW, getReq)
+
+		assert.Equal(t, http.StatusOK, getW.Code)
+		var resp inertia.PageObject
+		json.NewDecoder(getW.Body).Decode(&resp)
+
+		// Check structure: errors.loginBag.email
+		assert.NotNil(t, resp.Props["errors"])
+		errorsMap := resp.Props["errors"].(map[string]any)
+
+		assert.NotNil(t, errorsMap["loginBag"])
+		bagMap, ok := errorsMap["loginBag"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "Invalid credentials", bagMap["email"])
+	})
+}

@@ -30,6 +30,8 @@ type Inertia struct {
 	ssrEngineFactory func() (SSREngine, error)
 	ssrEngine        SSREngine
 	ssrInitLock      sync.Mutex
+
+	session Session
 }
 
 type inertiaConfig struct {
@@ -41,6 +43,8 @@ type inertiaConfig struct {
 
 	logger  Logger
 	version string
+
+	session Session
 }
 
 type InertiaOption func(config *inertiaConfig) error
@@ -109,6 +113,15 @@ func WithVersionFromFileFS(fsys fs.FS, path string) InertiaOption {
 	}
 }
 
+// WithSession sets a custom session implementation for flash data.
+// If not set, a default in-memory session is used.
+func WithSession(session Session) InertiaOption {
+	return func(config *inertiaConfig) error {
+		config.session = session
+		return nil
+	}
+}
+
 type Logger interface {
 	Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
@@ -134,6 +147,12 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 		ssrEngineFactory: config.ssrEngineFactory,
 		logger:           config.logger,
 		version:          config.version,
+		session:          config.session,
+	}
+
+	// Default to in-memory session if not provided
+	if i.session == nil {
+		i.session = NewMemorySession()
 	}
 
 	// Parse root template with bundler's template functions
@@ -157,10 +176,6 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 
 	return &i, nil
 }
-
-const (
-	XInertia = "X-Inertia"
-)
 
 type RootHtmlView struct {
 	InertiaHead template.HTML
@@ -446,6 +461,11 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		props = Props{}
 	}
 
+	// Merge flashed validation errors from context (set by Middleware)
+	if errors := r.Context().Value(inertiaErrorsKey); errors != nil {
+		props["errors"] = errors
+	}
+
 	// Apply render options
 	config := &renderConfig{}
 	for _, opt := range options {
@@ -491,4 +511,46 @@ func (i *Inertia) Redirect(w http.ResponseWriter, r *http.Request, url string) {
 		status = http.StatusSeeOther
 	}
 	http.Redirect(w, r, url, status)
+}
+
+// RedirectBack redirects the user back to the previous page using the Referer header.
+// Falls back to "/" if Referer is not available.
+// It automatically uses HTTP 303 (See Other) for PUT, PATCH, and DELETE requests
+// to prevent double form submissions, and 302 (Found) for other methods.
+func (i *Inertia) RedirectBack(w http.ResponseWriter, r *http.Request) {
+	url := r.Header.Get("Referer")
+	if url == "" {
+		url = "/"
+	}
+
+	i.Redirect(w, r, url)
+}
+
+// RenderErrors handles validation errors for both Precognition and standard Inertia requests.
+// For Precognition requests, it returns appropriate precognition responses.
+// For standard requests with errors, it flashes the errors to session and redirects back.
+func (i *Inertia) RenderErrors(w http.ResponseWriter, r *http.Request, errors map[string]any) error {
+	if len(errors) == 0 {
+		if IsPrecognition(r) {
+			PrecognitionSuccess(w)
+		}
+		return nil
+	}
+
+	if bag := r.Header.Get(XInertiaErrorBag); bag != "" {
+		errors = map[string]any{
+			bag: errors,
+		}
+	}
+
+	if IsPrecognition(r) {
+		return PrecognitionError(w, errors)
+	}
+
+	if err := i.session.Flash(w, r, "errors", errors); err != nil {
+		return err
+	}
+	i.RedirectBack(w, r)
+
+	return nil
 }
