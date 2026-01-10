@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -235,7 +236,7 @@ type processedProps struct {
 	finalProps    Props
 	deferredProps map[string][]string
 	onceProps     map[string]onceProp
-	scrollProps   Props    // Map of prop key to scroll config
+	scrollProps   map[string]scrollPropMetadata
 	mergeProps    []string // Prop paths to merge on navigation
 	prependProps  []string // Prop paths to prepend on navigation
 }
@@ -245,7 +246,7 @@ func newProcessedProps() processedProps {
 		finalProps:    make(Props),
 		deferredProps: make(map[string][]string),
 		onceProps:     make(map[string]onceProp),
-		scrollProps:   make(Props),
+		scrollProps:   make(map[string]scrollPropMetadata),
 	}
 }
 
@@ -266,20 +267,49 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 	}
 
 	for key, value := range props {
-		// Handle ScrollProp specially
+		// Handle ScrollProp specially (before regular Prop handling)
 		if scrollProp, ok := value.(ScrollProp); ok {
-			// Store scroll config
-			p.scrollProps[key] = scrollProp.Config
-
-			// Determine merge behavior based on request header
-			if headers.InfiniteScrollMerge == "prepend" {
-				p.prependProps = append(p.prependProps, scrollProp.MergePath)
-			} else {
-				p.mergeProps = append(p.mergeProps, scrollProp.MergePath)
+			// Check if we should include this prop (same logic as default props)
+			shouldInclude := true
+			if headers.IsPartial {
+				if len(headers.PartialData) > 0 {
+					shouldInclude = slices.Contains(headers.PartialData, key)
+				}
+				if len(headers.PartialExcept) > 0 && slices.Contains(headers.PartialExcept, key) {
+					shouldInclude = false
+				}
 			}
 
-			// Set the actual data as the prop value
-			p.finalProps[key] = scrollProp.Data
+			if !shouldInclude {
+				continue // Skip - don't resolve if not requested
+			}
+
+			// Resolve only if included
+			resolved, err := scrollProp.Resolve(ctx)
+			if err != nil {
+				return p, err
+			}
+			p.finalProps[key] = resolved
+
+			// Configure merge behavior based on header
+			wrapper := scrollProp.GetWrapper()
+			mergePath := key + "." + wrapper
+
+			if headers.InfiniteScrollMerge == "prepend" {
+				p.prependProps = append(p.prependProps, mergePath)
+			} else {
+				p.mergeProps = append(p.mergeProps, mergePath)
+			}
+
+			// Collect scroll metadata
+			meta := scrollProp.GetMetadata(resolved)
+			p.scrollProps[key] = scrollPropMetadata{
+				PageName:     meta.PageName,
+				PreviousPage: meta.PreviousPage,
+				NextPage:     meta.NextPage,
+				CurrentPage:  meta.CurrentPage,
+				Reset:        slices.Contains(headers.ResetProps, key),
+			}
 			continue
 		}
 
@@ -388,19 +418,28 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 }
 
 type PageObject struct {
-	Component      string              `json:"component"`
-	URL            string              `json:"url"`
-	Props          Props               `json:"props"`
-	Version        string              `json:"version"`
-	EncryptHistory bool                `json:"encryptHistory"`
-	ClearHistory   bool                `json:"clearHistory"`
-	MergeProps     []string            `json:"mergeProps"`
-	PrependProps   []string            `json:"prependProps"`
-	DeepMergeProps []string            `json:"deepMergeProps"`
-	MatchPropsOn   []string            `json:"matchPropsOn"`
-	ScrollProps    Props               `json:"scrollProps"`
-	DeferredProps  map[string][]string `json:"deferredProps"`
-	OnceProps      map[string]onceProp `json:"onceProps"`
+	Component      string                        `json:"component"`
+	URL            string                        `json:"url"`
+	Props          Props                         `json:"props"`
+	Version        string                        `json:"version"`
+	EncryptHistory bool                          `json:"encryptHistory"`
+	ClearHistory   bool                          `json:"clearHistory"`
+	MergeProps     []string                      `json:"mergeProps"`
+	PrependProps   []string                      `json:"prependProps"`
+	DeepMergeProps []string                      `json:"deepMergeProps"`
+	MatchPropsOn   []string                      `json:"matchPropsOn"`
+	DeferredProps  map[string][]string           `json:"deferredProps"`
+	OnceProps      map[string]onceProp           `json:"onceProps"`
+	ScrollProps    map[string]scrollPropMetadata `json:"scrollProps,omitempty"`
+}
+
+// scrollPropMetadata contains pagination metadata for infinite scrolling.
+type scrollPropMetadata struct {
+	PageName     string `json:"pageName"`
+	PreviousPage any    `json:"previousPage"`
+	NextPage     any    `json:"nextPage"`
+	CurrentPage  any    `json:"currentPage"`
+	Reset        bool   `json:"reset"`
 }
 
 // renderConfig holds per-render configuration options
@@ -488,8 +527,8 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		Version:        i.version,
 		EncryptHistory: config.encryptHistory != nil && *config.encryptHistory,
 		ClearHistory:   config.clearHistory != nil && *config.clearHistory,
-		MergeProps:     append(config.mergeProps, p.mergeProps...),
-		PrependProps:   append(config.prependProps, p.prependProps...),
+		MergeProps:     slices.Concat(config.mergeProps, p.mergeProps),
+		PrependProps:   slices.Concat(config.prependProps, p.prependProps),
 		DeepMergeProps: config.deepMergeProps,
 		MatchPropsOn:   config.matchPropsOn,
 		DeferredProps:  p.deferredProps,

@@ -47,6 +47,14 @@ func Once(resolver PropFunc) Prop {
 	return Prop{Type: PropTypeOnce, Resolver: resolver}
 }
 
+// Lazy creates a prop with lazy evaluation. The resolver is called
+// during rendering to produce the value. Unlike Optional or Deferred,
+// Lazy props are always included in the response.
+// This is equivalent to Laravel's closure props: 'users' => fn () => User::all()
+func Lazy(resolver PropFunc) Prop {
+	return Prop{Type: PropTypeDefault, Resolver: resolver}
+}
+
 func OnceWithExpiration(resolver PropFunc, expiration time.Duration) Prop {
 	expiresAt := fmt.Sprintf("%d", time.Now().Add(expiration).UnixMilli())
 	return Prop{Type: PropTypeOnce, Resolver: resolver, ExpiresAt: &expiresAt}

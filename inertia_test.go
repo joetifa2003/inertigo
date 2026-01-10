@@ -709,3 +709,313 @@ func TestValidationErrors_FullFlow(t *testing.T) {
 		assert.Equal(t, "Invalid credentials", bagMap["email"])
 	})
 }
+
+func TestRender_LazyProp(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	t.Run("Lazy prop is always included", func(t *testing.T) {
+		callCount := 0
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "TestComponent", inertia.Props{
+			"users": inertia.Lazy(func(ctx context.Context) (any, error) {
+				callCount++
+				return []string{"user1", "user2"}, nil
+			}),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		assert.Contains(t, resp.Props, "users")
+		assert.Equal(t, 1, callCount, "resolver should be called exactly once")
+	})
+
+	t.Run("Lazy prop included on partial reload when requested", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		req.Header.Set(inertia.XInertiaPartialComponent, "TestComponent")
+		req.Header.Set(inertia.XInertiaPartialData, "users")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "TestComponent", inertia.Props{
+			"users": inertia.Lazy(func(ctx context.Context) (any, error) {
+				return []string{"user1", "user2"}, nil
+			}),
+			"other": "data",
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		assert.Contains(t, resp.Props, "users")
+		assert.NotContains(t, resp.Props, "other")
+	})
+}
+
+func TestRender_ScrollProp(t *testing.T) {
+	bundler, err := vite.New(nil, vite.WithDevMode(true))
+	require.NoError(t, err)
+
+	i, err := inertia.New(bundler)
+	require.NoError(t, err)
+
+	t.Run("ScrollProp with metadata - initial load", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1", "post2"}, nil
+			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+				PageName:     "page",
+				CurrentPage:  1,
+				PreviousPage: nil,
+				NextPage:     2,
+			})),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// Check props include wrapped data
+		assert.Contains(t, resp.Props, "posts")
+		postsData := resp.Props["posts"].(map[string]any)
+		assert.Contains(t, postsData, "data")
+
+		// Check mergeProps includes the merge path
+		assert.Contains(t, resp.MergeProps, "posts.data")
+
+		// Check scrollProps metadata
+		assert.NotNil(t, resp.ScrollProps)
+		scrollMeta := resp.ScrollProps["posts"]
+		assert.Equal(t, "page", scrollMeta.PageName)
+		assert.Equal(t, float64(1), scrollMeta.CurrentPage) // JSON numbers are float64
+		assert.Nil(t, scrollMeta.PreviousPage)
+		assert.Equal(t, float64(2), scrollMeta.NextPage)
+		assert.False(t, scrollMeta.Reset)
+	})
+
+	t.Run("ScrollProp with custom wrapper", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1"}, nil
+			}, inertia.WithWrapper("items")),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// Check custom wrapper
+		postsData := resp.Props["posts"].(map[string]any)
+		assert.Contains(t, postsData, "items")
+		assert.NotContains(t, postsData, "data")
+
+		// Check mergeProps uses custom wrapper
+		assert.Contains(t, resp.MergeProps, "posts.items")
+	})
+
+	t.Run("ScrollProp merge intent - prepend", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		req.Header.Set(inertia.XInertiaInfiniteScrollMergeIntent, "prepend")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1"}, nil
+			}),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// Should be in prependProps when prepend header is set
+		assert.Contains(t, resp.PrependProps, "posts.data")
+	})
+
+	t.Run("ScrollProp merge intent - append (default)", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		// No merge intent header - should default to append
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1"}, nil
+			}),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// Should be in mergeProps (append is default)
+		assert.Contains(t, resp.MergeProps, "posts.data")
+	})
+
+	t.Run("ScrollProp with reset flag", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		req.Header.Set(inertia.XInertiaReset, "posts")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1"}, nil
+			}),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// Reset flag should be true
+		assert.True(t, resp.ScrollProps["posts"].Reset)
+	})
+
+	t.Run("ScrollProp with cursor pagination (string values)", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1"}, nil
+			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+				PageName:     "cursor",
+				CurrentPage:  "eyJpZCI6MTB9",
+				PreviousPage: "eyJpZCI6NX0=",
+				NextPage:     "eyJpZCI6MTV9",
+			})),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		scrollMeta := resp.ScrollProps["posts"]
+		assert.Equal(t, "cursor", scrollMeta.PageName)
+		assert.Equal(t, "eyJpZCI6MTB9", scrollMeta.CurrentPage)
+		assert.Equal(t, "eyJpZCI6NX0=", scrollMeta.PreviousPage)
+		assert.Equal(t, "eyJpZCI6MTV9", scrollMeta.NextPage)
+	})
+
+	t.Run("ScrollProp with metadataFunc", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				return []string{"post1", "post2", "post3"}, nil
+			}, inertia.WithScrollMetadataFunc(func(value any) *inertia.ScrollMetadata {
+				// Derive metadata from resolved value
+				data := value.(map[string]any)["data"].([]string)
+				return &inertia.ScrollMetadata{
+					PageName:    "page",
+					CurrentPage: 1,
+					NextPage:    len(data), // Use length as next page for demo
+				}
+			})),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		scrollMeta := resp.ScrollProps["posts"]
+		assert.Equal(t, float64(3), scrollMeta.NextPage)
+	})
+
+	t.Run("ScrollProp not resolved on partial reload when not requested", func(t *testing.T) {
+		resolverCalled := false
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		req.Header.Set(inertia.XInertiaPartialComponent, "Posts/Index")
+		req.Header.Set(inertia.XInertiaPartialData, "foo") // Only request "foo", not "posts"
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"foo": "bar",
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				resolverCalled = true
+				return []string{"post1"}, nil
+			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+				PageName:    "page",
+				CurrentPage: 1,
+			})),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// ScrollProp should NOT be resolved
+		assert.False(t, resolverCalled, "ScrollProp resolver should not be called when not requested")
+		assert.NotContains(t, resp.Props, "posts", "posts should not be in props")
+		assert.Empty(t, resp.ScrollProps, "scrollProps should be empty")
+
+		// But foo should be included
+		assert.Contains(t, resp.Props, "foo")
+	})
+
+	t.Run("ScrollProp resolved on partial reload when requested", func(t *testing.T) {
+		resolverCalled := false
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set(inertia.XInertia, "true")
+		req.Header.Set(inertia.XInertiaPartialComponent, "Posts/Index")
+		req.Header.Set(inertia.XInertiaPartialData, "posts") // Request "posts"
+		w := httptest.NewRecorder()
+
+		err := i.Render(w, req, "Posts/Index", inertia.Props{
+			"foo": "bar",
+			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+				resolverCalled = true
+				return []string{"post1"}, nil
+			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+				PageName:    "page",
+				CurrentPage: 1,
+			})),
+		})
+		require.NoError(t, err)
+
+		var resp inertia.PageObject
+		err = json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		// ScrollProp SHOULD be resolved
+		assert.True(t, resolverCalled, "ScrollProp resolver should be called when requested")
+		assert.Contains(t, resp.Props, "posts", "posts should be in props")
+		assert.NotEmpty(t, resp.ScrollProps, "scrollProps should not be empty")
+
+		// foo should NOT be included (not requested)
+		assert.NotContains(t, resp.Props, "foo")
+	})
+}

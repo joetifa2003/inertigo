@@ -1,42 +1,101 @@
 package inertia
 
-// ScrollConfig holds the pagination metadata for infinite scroll.
-type ScrollConfig struct {
-	PageName     string `json:"pageName"`     // Query parameter name for pagination (e.g., "page")
-	PreviousPage any    `json:"previousPage"` // Previous page number/cursor (nil if no previous)
-	NextPage     any    `json:"nextPage"`     // Next page number/cursor (nil if no next)
-	CurrentPage  any    `json:"currentPage"`  // Current page number/cursor
+import "context"
+
+// ScrollMetadata provides pagination metadata for infinite scrolling.
+type ScrollMetadata struct {
+	PageName     string // Query param name (default: "page")
+	PreviousPage any    // nil, int, or string (for cursor pagination)
+	NextPage     any    // nil, int, or string (for cursor pagination)
+	CurrentPage  any    // int or string (for cursor pagination)
 }
 
-// ScrollProp wraps data with scroll configuration for infinite scroll support.
-// This is used by the Inertia client to implement seamless infinite scrolling.
+// ScrollProp represents a paginated property for infinite scrolling.
+// Use the generic Scroll[T] constructor to create instances.
 type ScrollProp struct {
-	Data      any          // The paginated data (e.g., struct with Data field)
-	Config    ScrollConfig // Pagination metadata
-	MergePath string       // Path to merge at (e.g., "posts.data")
+	resolver     PropFunc
+	wrapper      string
+	metadata     *ScrollMetadata
+	metadataFunc func(value any) *ScrollMetadata
 }
 
-// Scroll creates a ScrollProp for infinite scroll functionality.
-// The data is typically a struct with a Data field containing the items.
-// The config provides pagination metadata (page numbers/cursors).
-// The mergePath specifies where the data should be merged (e.g., "users.data").
+// ScrollOption configures ScrollProp creation.
+type ScrollOption func(*ScrollProp)
+
+// WithWrapper sets the data wrapper key path (default: "data").
+func WithWrapper(wrapper string) ScrollOption {
+	return func(s *ScrollProp) {
+		s.wrapper = wrapper
+	}
+}
+
+// WithScrollMetadata sets static scroll metadata.
+func WithScrollMetadata(metadata ScrollMetadata) ScrollOption {
+	return func(s *ScrollProp) {
+		s.metadata = &metadata
+	}
+}
+
+// WithScrollMetadataFunc sets a function to derive metadata from the resolved value.
+func WithScrollMetadataFunc(fn func(value any) *ScrollMetadata) ScrollOption {
+	return func(s *ScrollProp) {
+		s.metadataFunc = fn
+	}
+}
+
+// Scroll creates a new ScrollProp for infinite scrolling with type-safe resolver.
+// The resolver returns a typed slice which is automatically wrapped.
 //
 // Example:
 //
-//	Scroll(
-//	    map[string]any{"data": users},
-//	    ScrollConfig{
-//	        PageName:     "page",
-//	        CurrentPage:  1,
-//	        NextPage:     2,
-//	        PreviousPage: nil,
-//	    },
-//	    "users.data",
-//	)
-func Scroll(data any, config ScrollConfig, mergePath string) ScrollProp {
-	return ScrollProp{
-		Data:      data,
-		Config:    config,
-		MergePath: mergePath,
+//	"posts": inertia.Scroll(func(ctx context.Context) ([]Post, error) {
+//	    return db.GetPosts(page, 20)
+//	}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+//	    PageName:    "page",
+//	    CurrentPage: page,
+//	    NextPage:    page + 1,
+//	}))
+//
+// This produces response: {"posts": {"data": [...]}}
+// With merge path: "posts.data"
+func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...ScrollOption) ScrollProp {
+	sp := ScrollProp{
+		wrapper: "data",
 	}
+	for _, opt := range opts {
+		opt(&sp)
+	}
+
+	// Wrap the typed resolver with automatic data wrapping
+	sp.resolver = func(ctx context.Context) (any, error) {
+		items, err := resolver(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{sp.wrapper: items}, nil
+	}
+
+	return sp
+}
+
+// Resolve executes the resolver (lazy evaluation).
+func (s *ScrollProp) Resolve(ctx context.Context) (any, error) {
+	return s.resolver(ctx)
+}
+
+// GetMetadata returns the scroll metadata for this prop.
+func (s *ScrollProp) GetMetadata(resolvedValue any) *ScrollMetadata {
+	if s.metadataFunc != nil {
+		return s.metadataFunc(resolvedValue)
+	}
+	if s.metadata != nil {
+		return s.metadata
+	}
+	// Return default metadata if none provided
+	return &ScrollMetadata{PageName: "page"}
+}
+
+// GetWrapper returns the wrapper key path.
+func (s *ScrollProp) GetWrapper() string {
+	return s.wrapper
 }

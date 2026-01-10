@@ -15,6 +15,7 @@ const (
 	XInertiaErrorBag                  = "X-Inertia-Error-Bag"
 	XInertiaInfiniteScrollMergeIntent = "X-Inertia-Infinite-Scroll-Merge-Intent"
 	XInertiaExceptOnceProps           = "X-Inertia-Except-Once-Props"
+	XInertiaReset                     = "X-Inertia-Reset"
 	HeaderPrecognition                = "Precognition"
 	HeaderPrecognitionValidateOnly    = "Precognition-Validate-Only"
 	HeaderPrecognitionSuccess         = "Precognition-Success"
@@ -25,7 +26,8 @@ type inertiaHeaders struct {
 	PartialData         []string
 	PartialExcept       []string
 	ExceptOnceProps     []string
-	InfiniteScrollMerge string // "append" or "prepend"
+	ResetProps          []string // Props to reset from X-Inertia-Reset header
+	InfiniteScrollMerge string   // "append" or "prepend"
 	IsPartial           bool
 	IsInertia           bool
 }
@@ -47,6 +49,9 @@ func parseInertiaHeaders(r *http.Request, component string) *inertiaHeaders {
 	}
 	if exceptOnce := r.Header.Get(XInertiaExceptOnceProps); exceptOnce != "" {
 		headers.ExceptOnceProps = strings.Split(exceptOnce, ",")
+	}
+	if resetProps := r.Header.Get(XInertiaReset); resetProps != "" {
+		headers.ResetProps = strings.Split(resetProps, ",")
 	}
 
 	return headers
