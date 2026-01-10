@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fastschema/qjs v0.0.6
+	github.com/peterbourgon/mergemap v0.0.1
 	github.com/stretchr/testify v1.11.1
 )
 

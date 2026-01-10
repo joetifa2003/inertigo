@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/peterbourgon/mergemap"
+
 	"github.com/joetifa2003/inertigo/internal/pool"
 )
 
@@ -259,11 +261,33 @@ var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[
 	p.prependProps = p.prependProps[:0]
 }))
 
+var emptyJsonObject = json.RawMessage("{}")
+
 func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (processedProps, error) {
 	p := processedPropsPool.Get()
 
-	if _, ok := props["errors"]; !ok {
-		props["errors"] = Value(map[string]any{})
+	var existingErrorsMap map[string]any
+
+	// if existingErrorProp prop is not an errorsProp, ignore it
+	switch existingErrorProp := props["errors"].(type) {
+	case errorsProp:
+		existingErrorsMap = existingErrorProp.value
+	}
+
+	// merge flashed validation errors from context (set by Middleware)
+	if errorsFromFlash := ctx.Value(inertiaErrorsKey); errorsFromFlash != nil {
+		switch errorsFromFlash := errorsFromFlash.(type) {
+		case map[string]any:
+			if existingErrorsMap == nil {
+				existingErrorsMap = errorsFromFlash
+			} else {
+				mergemap.Merge(existingErrorsMap, errorsFromFlash)
+			}
+		}
+	}
+
+	if existingErrorsMap != nil {
+		props["errors"] = Errors(existingErrorsMap)
 	}
 
 	for key, prop := range props {
@@ -276,6 +300,10 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 		}
 
 		prop.ModifyProcessedProps(key, headers, &p)
+	}
+
+	if p.finalProps["errors"] == nil {
+		p.finalProps["errors"] = emptyJsonObject
 	}
 
 	return p, nil
@@ -430,22 +458,6 @@ func WithMatchPropsOn(props ...string) RenderOption {
 func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props, options ...RenderOption) error {
 	if props == nil {
 		props = Props{}
-	}
-
-	// Merge flashed validation errors from context (set by Middleware)
-	if errors := r.Context().Value(inertiaErrorsKey); errors != nil {
-		if existingErrors, ok := props["errors"]; ok {
-			switch existingErrors := existingErrors.(type) {
-			case valueProp:
-				if m, ok := existingErrors.value.(map[string]any); ok {
-					for key, value := range errors.(map[string]any) {
-						m[key] = value
-					}
-				}
-			}
-		} else {
-			props["errors"] = Value(errors)
-		}
 	}
 
 	// Apply render options
