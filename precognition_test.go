@@ -88,52 +88,58 @@ func TestShouldValidateField(t *testing.T) {
 }
 
 func TestPrecognitionSuccess(t *testing.T) {
-	rec := httptest.NewRecorder()
-	PrecognitionSuccess(rec)
+	t.Run("Basic Success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/", nil)
+		PrecognitionSuccess(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("PrecognitionSuccess code = %v, want %v", rec.Code, http.StatusNoContent)
-	}
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("PrecognitionSuccess code = %v, want %v", rec.Code, http.StatusNoContent)
+		}
 
-	if rec.Header().Get("Vary") != HeaderPrecognition {
-		t.Errorf("Vary header = %v, want %v", rec.Header().Get("Vary"), HeaderPrecognition)
-	}
-	if rec.Header().Get(HeaderPrecognition) != "true" {
-		t.Errorf("Precognition header = %v, want true", rec.Header().Get(HeaderPrecognition))
-	}
-	if rec.Header().Get(HeaderPrecognitionSuccess) != "true" {
-		t.Errorf("Precognition-Success header = %v, want true", rec.Header().Get(HeaderPrecognitionSuccess))
-	}
+		if rec.Header().Get("Vary") != HeaderPrecognition {
+			t.Errorf("Vary header = %v, want %v", rec.Header().Get("Vary"), HeaderPrecognition)
+		}
+		if rec.Header().Get(HeaderPrecognition) != "true" {
+			t.Errorf("Precognition header = %v, want true", rec.Header().Get(HeaderPrecognition))
+		}
+		if rec.Header().Get(HeaderPrecognitionSuccess) != "true" {
+			t.Errorf("Precognition-Success header = %v, want true", rec.Header().Get(HeaderPrecognitionSuccess))
+		}
+	})
 }
 
 func TestPrecognitionError(t *testing.T) {
-	rec := httptest.NewRecorder()
-	errors := map[string]any{"name": "Required"}
-	err := PrecognitionError(rec, errors)
-	if err != nil {
-		t.Fatalf("PrecognitionError() error = %v", err)
-	}
+	t.Run("Basic Error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/", nil)
+		errors := map[string]any{"name": "Required"}
+		err := PrecognitionError(rec, req, errors)
+		if err != nil {
+			t.Fatalf("PrecognitionError() error = %v", err)
+		}
 
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Errorf("PrecognitionError code = %v, want %v", rec.Code, http.StatusUnprocessableEntity)
-	}
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("PrecognitionError code = %v, want %v", rec.Code, http.StatusUnprocessableEntity)
+		}
 
-	if rec.Header().Get("Vary") != HeaderPrecognition {
-		t.Errorf("Vary header = %v, want %v", rec.Header().Get("Vary"), HeaderPrecognition)
-	}
-	if rec.Header().Get(HeaderPrecognition) != "true" {
-		t.Errorf("Precognition header = %v, want true", rec.Header().Get(HeaderPrecognition))
-	}
-	if rec.Header().Get("Content-Type") != "application/json" {
-		t.Errorf("Content-Type = %v, want application/json", rec.Header().Get("Content-Type"))
-	}
+		if rec.Header().Get("Vary") != HeaderPrecognition {
+			t.Errorf("Vary header = %v, want %v", rec.Header().Get("Vary"), HeaderPrecognition)
+		}
+		if rec.Header().Get(HeaderPrecognition) != "true" {
+			t.Errorf("Precognition header = %v, want true", rec.Header().Get(HeaderPrecognition))
+		}
+		if rec.Header().Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %v, want application/json", rec.Header().Get("Content-Type"))
+		}
 
-	var body map[string]map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("Failed to decode body: %v", err)
-	}
+		var body map[string]map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("Failed to decode body: %v", err)
+		}
 
-	if body["errors"]["name"] != "Required" {
-		t.Errorf("Body errors.name = %v, want Required", body["errors"]["name"])
-	}
+		if body["errors"]["name"] != "Required" {
+			t.Errorf("Body errors.name = %v, want Required", body["errors"]["name"])
+		}
+	})
 }

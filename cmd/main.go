@@ -40,6 +40,29 @@ func main() {
 	)
 	must(err)
 
+	// Example middleware to share props on every request
+	authMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Share auth data on every request
+			inertia.Share(r, "auth", inertia.Lazy(func(ctx context.Context) (any, error) {
+				// In a real app: get from session/JWT
+				return map[string]any{
+					"user": map[string]any{
+						"id":    1,
+						"name":  "John Doe",
+						"email": "john@example.com",
+					},
+				}, nil
+			}))
+
+			// Share app metadata
+			inertia.Share(r, "appName", inertia.Value("Go Inertia Demo"))
+			inertia.Share(r, "year", inertia.Value(time.Now().Year()))
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	mux := http.NewServeMux()
 
 	mux.Handle(bundler.AssetPrefix(), bundler.Handler())
@@ -122,9 +145,15 @@ func main() {
 				return
 			}
 
+			if inertia.IsPrecognition(r) {
+				return
+			}
+
 			if len(errors) != 0 {
 				return
 			}
+
+			i.Flash(w, r, "success", "User created successfully!")
 
 			i.Redirect(w, r, "/")
 		}
@@ -132,7 +161,7 @@ func main() {
 
 	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8001"))
 
-	http.ListenAndServe(":8001", i.Middleware(mux))
+	http.ListenAndServe(":8001", i.Middleware(authMiddleware(mux)))
 }
 
 func must(err error) {

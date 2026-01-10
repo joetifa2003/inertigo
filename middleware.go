@@ -5,33 +5,31 @@ import (
 	"net/http"
 )
 
-type contextKey string
-
-const (
-	// inertiaErrorsKey is the context key for storing flashed validation errors
-	inertiaErrorsKey contextKey = "inertia_errors"
-)
-
 // Middleware wraps an http.Handler to handle Inertia-specific concerns:
 // - Asset versioning (409 Conflict on version mismatch for GET requests)
-// - Retrieving flashed validation errors from session and adding them to context
+// - Managing shared and flash props via pooled inertiaContext
 func (i *Inertia) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Retrieve flashed validation errors from session and add to context
-		if errors, _ := i.session.Get(w, r, "errors"); errors != nil {
-			ctx := context.WithValue(r.Context(), inertiaErrorsKey, errors)
-			r = r.WithContext(ctx)
+		// Get pooled inertiaContext
+		ic := inertiaContextPool.Get()
+		defer inertiaContextPool.Put(ic)
+
+		// Load flash data from session
+		if flashData, _ := i.session.Get(w, r); flashData != nil {
+			ic.flash = flashData
 		}
+
+		// Inject inertiaContext into request
+		ctx := context.WithValue(r.Context(), inertiaContextKey, &ic)
+		r = r.WithContext(ctx)
 
 		// CSRF Protection
 		if i.csrfEnabled {
-			// Only set cookie if we need to create a new token
 			if needsNewCSRFToken(r) {
 				token := generateCSRFToken()
 				setCSRFCookie(w, token, i.csrfConfig)
 			}
 
-			// Validate on state-changing methods
 			if isStateChangingMethod(r.Method) {
 				if !validateCSRF(r) {
 					http.Error(w, "CSRF token mismatch", http.StatusForbidden)

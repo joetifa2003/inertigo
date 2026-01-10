@@ -14,11 +14,11 @@ import (
 type Session interface {
 	// Flash stores data that will be available for the next request only.
 	// The data is automatically removed after being retrieved via Get.
-	Flash(w http.ResponseWriter, r *http.Request, key string, value any) error
+	Flash(w http.ResponseWriter, r *http.Request, values map[string]any) error
 
 	// Get retrieves a flashed value and removes it from the session.
 	// Returns nil if the key doesn't exist.
-	Get(w http.ResponseWriter, r *http.Request, key string) (any, error)
+	Get(w http.ResponseWriter, r *http.Request) (map[string]any, error)
 }
 
 const (
@@ -44,7 +44,7 @@ func NewMemorySession(cookieName string) *MemorySession {
 }
 
 // Flash stores a value in the session that will be available for the next request only.
-func (m *MemorySession) Flash(w http.ResponseWriter, r *http.Request, key string, value any) error {
+func (m *MemorySession) Flash(w http.ResponseWriter, r *http.Request, values map[string]any) error {
 	sessionID := m.getOrCreateSessionID(w, r)
 
 	m.mu.Lock()
@@ -53,14 +53,14 @@ func (m *MemorySession) Flash(w http.ResponseWriter, r *http.Request, key string
 	if m.store[sessionID] == nil {
 		m.store[sessionID] = make(map[string]any)
 	}
-	m.store[sessionID][key] = value
+	m.store[sessionID] = values
 
 	return nil
 }
 
 // Get retrieves a flashed value from the session and removes it.
 // Returns nil if the key doesn't exist.
-func (m *MemorySession) Get(w http.ResponseWriter, r *http.Request, key string) (any, error) {
+func (m *MemorySession) Get(w http.ResponseWriter, r *http.Request) (map[string]any, error) {
 	sessionID := m.getSessionID(r)
 	if sessionID == "" {
 		return nil, nil
@@ -74,20 +74,9 @@ func (m *MemorySession) Get(w http.ResponseWriter, r *http.Request, key string) 
 		return nil, nil
 	}
 
-	value, exists := sessionData[key]
-	if !exists {
-		return nil, nil
-	}
+	delete(m.store, sessionID)
 
-	// Remove the flashed value after retrieval
-	delete(sessionData, key)
-
-	// Clean up empty session
-	if len(sessionData) == 0 {
-		delete(m.store, sessionID)
-	}
-
-	return value, nil
+	return sessionData, nil
 }
 
 func (m *MemorySession) getSessionID(r *http.Request) string {

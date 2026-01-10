@@ -17,10 +17,32 @@ import (
 	"sync"
 	"time"
 
-	"github.com/peterbourgon/mergemap"
-
 	"github.com/joetifa2003/inertigo/internal/pool"
 )
+
+type contextKey string
+
+const (
+	inertiaContextKey contextKey = "inertia_ctx"
+)
+
+// inertiaContext holds all accumulated data for a request.
+type inertiaContext struct {
+	shared Props          // Shared props for current request
+	flash  map[string]any // Flash props from previous request (read)
+}
+
+func newInertiaContext() inertiaContext {
+	return inertiaContext{
+		shared: make(Props),
+		flash:  make(map[string]any),
+	}
+}
+
+var inertiaContextPool = pool.NewPool(newInertiaContext, pool.WithPoolBeforeGet[inertiaContext](func(ic inertiaContext) {
+	clear(ic.shared)
+	clear(ic.flash)
+}))
 
 type Inertia struct {
 	logger  Logger
@@ -202,6 +224,42 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 	return &i, nil
 }
 
+// Share adds a prop to the request context for the current request.
+// Shared props have lower priority than page props and flash props.
+func Share(r *http.Request, key string, prop Prop) {
+	ShareMultiple(r, Props{key: prop})
+}
+
+// ShareMultiple adds multiple shared props to the request context.
+func ShareMultiple(r *http.Request, props Props) {
+	if ic := getInertiaContext(r); ic != nil {
+		for k, v := range props {
+			ic.shared[k] = v
+		}
+	}
+}
+
+// Flash stores data for the next request only.
+// Flash data has the highest priority and overrides both shared and page props.
+func (i *Inertia) Flash(w http.ResponseWriter, r *http.Request, key string, value any) error {
+	return i.FlashMultiple(w, r, map[string]any{key: value})
+}
+
+// FlashMultiple stores multiple key-value pairs for the next request.
+func (i *Inertia) FlashMultiple(w http.ResponseWriter, r *http.Request, data map[string]any) error {
+	return i.session.Flash(w, r, data)
+}
+
+// getInertiaContext retrieves the inertiaContext from the request.
+func getInertiaContext(r *http.Request) *inertiaContext {
+	if ctx := r.Context().Value(inertiaContextKey); ctx != nil {
+		if ic, ok := ctx.(*inertiaContext); ok {
+			return ic
+		}
+	}
+	return nil
+}
+
 type RootHtmlView struct {
 	InertiaHead template.HTML
 	InertiaBody template.HTML
@@ -283,35 +341,8 @@ var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[
 	p.prependProps = p.prependProps[:0]
 }))
 
-var emptyJsonObject = json.RawMessage("{}")
-
 func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (processedProps, error) {
 	p := processedPropsPool.Get()
-
-	var existingErrorsMap map[string]any
-
-	// if existingErrorProp prop is not an errorsProp, ignore it
-	switch existingErrorProp := props["errors"].(type) {
-	case errorsProp:
-		existingErrorsMap = existingErrorProp.value
-	}
-
-	// merge flashed validation errors from context (set by Middleware)
-	if errorsFromFlash := ctx.Value(inertiaErrorsKey); errorsFromFlash != nil {
-		switch errorsFromFlash := errorsFromFlash.(type) {
-		case map[string]any:
-			if existingErrorsMap == nil {
-				existingErrorsMap = errorsFromFlash
-			} else {
-				mergemap.Merge(existingErrorsMap, errorsFromFlash)
-			}
-		}
-	}
-
-	// if we have any error, wrap it back in an errorsProp
-	if existingErrorsMap != nil {
-		props["errors"] = Errors(existingErrorsMap)
-	}
 
 	for key, prop := range props {
 		if prop.shouldInclude(key, headers) {
@@ -323,11 +354,6 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 		}
 
 		prop.modifyProcessedProps(key, headers, &p)
-	}
-
-	// if there were no errors at all, set it to an empty object
-	if p.finalProps["errors"] == nil {
-		p.finalProps["errors"] = emptyJsonObject
 	}
 
 	return p, nil
@@ -413,6 +439,7 @@ type PageObject struct {
 	DeferredProps  map[string][]string           `json:"deferredProps"`
 	OnceProps      map[string]oncePropData       `json:"onceProps"`
 	ScrollProps    map[string]scrollPropMetadata `json:"scrollProps,omitempty"`
+	Flash          map[string]any                `json:"flash,omitempty"`
 }
 
 // scrollPropMetadata contains pagination metadata for infinite scrolling.
@@ -489,11 +516,52 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		opt(config)
 	}
 
+	ic := getInertiaContext(r)
+
+	mergedProps := make(Props)
+
+	if ic != nil {
+		for k, v := range ic.shared {
+			mergedProps[k] = v
+		}
+	}
+
+	for k, v := range props {
+		mergedProps[k] = v
+	}
+
+	// Get flash data (separate from props)
+	var flashData map[string]any
+	if ic != nil && len(ic.flash) > 0 {
+		flashData = ic.flash
+	}
+
 	headers := parseInertiaHeaders(r, component)
-	p, err := i.processProps(r.Context(), props, headers)
+	p, err := i.processProps(r.Context(), mergedProps, headers)
 	defer processedPropsPool.Put(p)
 	if err != nil {
 		return err
+	}
+
+	if flashData != nil {
+		finalErrors := p.finalProps["errors"]
+		switch finalErrors := finalErrors.(type) {
+		case map[string]any:
+
+			switch flashErrors := flashData["errors"].(type) {
+			case map[string]any:
+				for k, v := range flashErrors {
+					finalErrors[k] = v
+				}
+			}
+
+		default:
+			p.finalProps["errors"] = flashData["errors"]
+		}
+	}
+
+	if p.finalProps["errors"] == nil {
+		p.finalProps["errors"] = json.RawMessage("{}")
 	}
 
 	pageObject := &PageObject{
@@ -510,6 +578,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		DeferredProps:  p.deferredProps,
 		OnceProps:      p.onceProps,
 		ScrollProps:    p.scrollProps,
+		Flash:          flashData,
 	}
 
 	if headers.IsInertia {
@@ -549,7 +618,7 @@ func (i *Inertia) RedirectBack(w http.ResponseWriter, r *http.Request) {
 func (i *Inertia) RenderErrors(w http.ResponseWriter, r *http.Request, errors map[string]any) error {
 	if len(errors) == 0 {
 		if IsPrecognition(r) {
-			PrecognitionSuccess(w)
+			PrecognitionSuccess(w, r)
 		}
 		return nil
 	}
@@ -561,12 +630,10 @@ func (i *Inertia) RenderErrors(w http.ResponseWriter, r *http.Request, errors ma
 	}
 
 	if IsPrecognition(r) {
-		return PrecognitionError(w, errors)
+		return PrecognitionError(w, r, errors)
 	}
 
-	if err := i.session.Flash(w, r, "errors", errors); err != nil {
-		return err
-	}
+	i.Flash(w, r, "errors", errors)
 	i.RedirectBack(w, r)
 
 	return nil

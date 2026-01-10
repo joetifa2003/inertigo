@@ -32,7 +32,7 @@ func ShouldValidateField(r *http.Request, field string) bool {
 }
 
 // PrecognitionSuccess sends a successful Precognition response (204 No Content)
-func PrecognitionSuccess(w http.ResponseWriter) {
+func PrecognitionSuccess(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", HeaderPrecognition)
 	w.Header().Set(HeaderPrecognition, "true")
 	w.Header().Set(HeaderPrecognitionSuccess, "true")
@@ -40,7 +40,7 @@ func PrecognitionSuccess(w http.ResponseWriter) {
 }
 
 // PrecognitionError sends a Precognition error response (422 Unprocessable Entity)
-func PrecognitionError(w http.ResponseWriter, errors map[string]any) error {
+func PrecognitionError(w http.ResponseWriter, r *http.Request, errors map[string]any) error {
 	w.Header().Set("Vary", HeaderPrecognition)
 	w.Header().Set(HeaderPrecognition, "true")
 	w.Header().Set("Content-Type", "application/json")
