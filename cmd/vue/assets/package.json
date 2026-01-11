@@ -1,0 +1,15 @@
+{
+  "devDependencies": {
+    "fastestsmallesttextencoderdecoder": "^1.0.22",
+    "formdata-polyfill": "^4.0.10",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0",
+    "whatwg-url": "^15.1.0"
+  },
+  "dependencies": {
+    "@inertiajs/vue3": "^2.3.8",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "@vue/server-renderer": "^3.5.26",
+    "vue": "^3.5.26"
+  }
+}
