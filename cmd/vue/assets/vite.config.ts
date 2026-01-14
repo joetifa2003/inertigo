@@ -10,4 +10,7 @@ export default defineConfig(({ isSsrBuild }) => ({
       ssrEntryPoint: "./ts/ssr.ts",
     }),
   ],
+  server: {
+    port: 5174,
+  }
 }));

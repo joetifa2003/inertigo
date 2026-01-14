@@ -21,6 +21,7 @@ func main() {
 	bundler, err := vite.New(
 		os.DirFS("assets/dist"),
 		vite.WithDevMode(*isDev),
+		vite.WithURL("http://localhost:5174"),
 	)
 	must(err)
 
@@ -121,9 +122,9 @@ func main() {
 		i.Redirect(w, r, "/")
 	})
 
-	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8001"))
+	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8002"))
 
-	http.ListenAndServe(":8001", i.Middleware(mux))
+	http.ListenAndServe(":8002", i.Middleware(mux))
 }
 
 func must(err error) {
