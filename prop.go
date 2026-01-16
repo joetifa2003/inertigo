@@ -28,7 +28,8 @@ type Props map[string]Prop
 // oncePropData is the JSON structure for once props in response.
 type oncePropData struct {
 	Prop      string `json:"prop"`
-	ExpiresAt string `json:"expiresAt"`
+	ExpiresAt string `json:"expiresAt,omitempty"`
+	Alias     string `json:"alias,omitempty"` // Custom key for client-side caching
 }
 
 // defaultShouldInclude is the shared logic for default/lazy/value/scroll props.

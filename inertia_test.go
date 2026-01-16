@@ -162,7 +162,7 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertia: "true",
 			},
 			props: inertia.Props{
-				"onc_exp": inertia.OnceWithExpiration(func(ctx context.Context) (any, error) { return "once_exp", nil }, 1*time.Hour),
+				"onc_exp": inertia.Once(func(ctx context.Context) (any, error) { return "once_exp", nil }, inertia.OnceUntil(1*time.Hour)),
 			},
 			expectedProps: []string{"onc_exp", "errors"},
 		},
@@ -418,7 +418,7 @@ func TestRender_ClearHistoryOption(t *testing.T) {
 	}
 }
 
-func TestRender_MergePropsOptions(t *testing.T) {
+func TestRender_MergeProp(t *testing.T) {
 	bundler, err := vite.New(nil, vite.WithDevMode(true))
 	require.NoError(t, err)
 
@@ -427,52 +427,57 @@ func TestRender_MergePropsOptions(t *testing.T) {
 
 	tests := []struct {
 		name                   string
-		options                []inertia.RenderOption
+		props                  inertia.Props
 		expectedMergeProps     []string
 		expectedPrependProps   []string
 		expectedDeepMergeProps []string
 		expectedMatchPropsOn   []string
 	}{
 		{
-			name:                   "no options - all nil",
-			options:                nil,
-			expectedMergeProps:     nil,
-			expectedPrependProps:   nil,
-			expectedDeepMergeProps: nil,
-			expectedMatchPropsOn:   nil,
-		},
-		{
-			name:               "WithMergeProps",
-			options:            []inertia.RenderOption{inertia.WithMergeProps("posts", "comments")},
-			expectedMergeProps: []string{"posts", "comments"},
-		},
-		{
-			name:                 "WithPrependProps",
-			options:              []inertia.RenderOption{inertia.WithPrependProps("notifications")},
-			expectedPrependProps: []string{"notifications"},
-		},
-		{
-			name:                   "WithDeepMergeProps",
-			options:                []inertia.RenderOption{inertia.WithDeepMergeProps("conversations")},
-			expectedDeepMergeProps: []string{"conversations"},
-		},
-		{
-			name:                 "WithMatchPropsOn",
-			options:              []inertia.RenderOption{inertia.WithMatchPropsOn("posts.id", "comments.id")},
-			expectedMatchPropsOn: []string{"posts.id", "comments.id"},
-		},
-		{
-			name: "multiple options combined",
-			options: []inertia.RenderOption{
-				inertia.WithMergeProps("posts"),
-				inertia.WithPrependProps("notifications"),
-				inertia.WithDeepMergeProps("conversations"),
-				inertia.WithMatchPropsOn("posts.id"),
+			name: "basic Merge prop",
+			props: inertia.Props{
+				"posts": inertia.Merge(func(ctx context.Context) (any, error) {
+					return []string{"post1", "post2"}, nil
+				}),
 			},
-			expectedMergeProps:     []string{"posts"},
-			expectedPrependProps:   []string{"notifications"},
-			expectedDeepMergeProps: []string{"conversations"},
-			expectedMatchPropsOn:   []string{"posts.id"},
+			expectedMergeProps: []string{"posts"},
+		},
+		{
+			name: "Merge with Append paths",
+			props: inertia.Props{
+				"results": inertia.Merge(func(ctx context.Context) (any, error) {
+					return map[string]any{"data": []string{"item1"}}, nil
+				}, inertia.Append("data")),
+			},
+			expectedMergeProps: []string{"results.data"},
+		},
+		{
+			name: "Merge with Prepend paths",
+			props: inertia.Props{
+				"messages": inertia.Merge(func(ctx context.Context) (any, error) {
+					return []string{"msg1"}, nil
+				}, inertia.Prepend("items")),
+			},
+			expectedPrependProps: []string{"messages.items"},
+		},
+		{
+			name: "Merge with DeepMerge",
+			props: inertia.Props{
+				"settings": inertia.Merge(func(ctx context.Context) (any, error) {
+					return map[string]any{"theme": "dark"}, nil
+				}, inertia.MergeDeepMerge()),
+			},
+			expectedDeepMergeProps: []string{"settings"},
+		},
+		{
+			name: "Merge with MatchOn",
+			props: inertia.Props{
+				"users": inertia.Merge(func(ctx context.Context) (any, error) {
+					return []map[string]any{{"id": 1, "name": "Alice"}}, nil
+				}, inertia.MergeMatchOn("id")),
+			},
+			expectedMergeProps:   []string{"users"},
+			expectedMatchPropsOn: []string{"users.id"},
 		},
 	}
 
@@ -482,17 +487,17 @@ func TestRender_MergePropsOptions(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
+			err := i.Render(w, req, "TestComponent", tt.props)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
 			err = json.NewDecoder(w.Body).Decode(&resp)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.expectedMergeProps, resp.MergeProps)
-			assert.Equal(t, tt.expectedPrependProps, resp.PrependProps)
-			assert.Equal(t, tt.expectedDeepMergeProps, resp.DeepMergeProps)
-			assert.Equal(t, tt.expectedMatchPropsOn, resp.MatchPropsOn)
+			assert.ElementsMatch(t, tt.expectedMergeProps, resp.MergeProps)
+			assert.ElementsMatch(t, tt.expectedPrependProps, resp.PrependProps)
+			assert.ElementsMatch(t, tt.expectedDeepMergeProps, resp.DeepMergeProps)
+			assert.ElementsMatch(t, tt.expectedMatchPropsOn, resp.MatchPropsOn)
 		})
 	}
 }
@@ -508,14 +513,15 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
-	// Test that all options can be used together
-	err = i.Render(w, req, "TestComponent", inertia.Props{"data": inertia.Value("value")},
+	// Test that all remaining render options can be used together with Merge props
+	err = i.Render(w, req, "TestComponent", inertia.Props{
+		"data": inertia.Value("value"),
+		"items": inertia.Merge(func(ctx context.Context) (any, error) {
+			return []string{"item1"}, nil
+		}),
+	},
 		inertia.WithEncryptHistory(true),
 		inertia.WithClearHistory(true),
-		inertia.WithMergeProps("items"),
-		inertia.WithPrependProps("newItems"),
-		inertia.WithDeepMergeProps("settings"),
-		inertia.WithMatchPropsOn("items.id"),
 	)
 	require.NoError(t, err)
 
@@ -526,9 +532,6 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	assert.True(t, resp.EncryptHistory)
 	assert.True(t, resp.ClearHistory)
 	assert.Equal(t, []string{"items"}, resp.MergeProps)
-	assert.Equal(t, []string{"newItems"}, resp.PrependProps)
-	assert.Equal(t, []string{"settings"}, resp.DeepMergeProps)
-	assert.Equal(t, []string{"items.id"}, resp.MatchPropsOn)
 }
 
 func TestRenderErrors(t *testing.T) {

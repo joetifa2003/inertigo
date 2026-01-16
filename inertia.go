@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -315,16 +314,18 @@ func (i *Inertia) Logger() Logger {
 }
 
 type processedProps struct {
-	finalProps    map[string]any
-	deferredProps map[string][]string
-	onceProps     map[string]oncePropData
-	scrollProps   map[string]scrollPropMetadata
-	mergeProps    []string // Prop paths to merge on navigation
-	prependProps  []string // Prop paths to prepend on navigation
+	finalProps     map[string]any
+	deferredProps  map[string][]string
+	onceProps      map[string]oncePropData
+	scrollProps    map[string]scrollPropMetadata
+	mergeProps     []string // Prop paths to append on navigation
+	prependProps   []string // Prop paths to prepend on navigation
+	deepMergeProps []string // Prop paths to deep merge on navigation
+	matchPropsOn   []string // Field paths for matching when merging
 }
 
-func newProcessedProps() processedProps {
-	return processedProps{
+func newProcessedProps() *processedProps {
+	return &processedProps{
 		finalProps:    make(map[string]any),
 		deferredProps: make(map[string][]string),
 		onceProps:     make(map[string]oncePropData),
@@ -332,16 +333,18 @@ func newProcessedProps() processedProps {
 	}
 }
 
-var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[processedProps](func(p processedProps) {
+var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[*processedProps](func(p *processedProps) {
 	clear(p.finalProps)
 	clear(p.deferredProps)
 	clear(p.onceProps)
 	clear(p.scrollProps)
 	p.mergeProps = p.mergeProps[:0]
 	p.prependProps = p.prependProps[:0]
+	p.deepMergeProps = p.deepMergeProps[:0]
+	p.matchPropsOn = p.matchPropsOn[:0]
 }))
 
-func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (processedProps, error) {
+func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (*processedProps, error) {
 	p := processedPropsPool.Get()
 
 	for key, prop := range props {
@@ -353,7 +356,7 @@ func (i *Inertia) processProps(ctx context.Context, props Props, headers *inerti
 			p.finalProps[key] = resolved
 		}
 
-		prop.modifyProcessedProps(key, headers, &p)
+		prop.modifyProcessedProps(key, headers, p)
 	}
 
 	return p, nil
@@ -455,10 +458,6 @@ type scrollPropMetadata struct {
 type renderConfig struct {
 	encryptHistory *bool
 	clearHistory   *bool
-	mergeProps     []string
-	prependProps   []string
-	deepMergeProps []string
-	matchPropsOn   []string
 }
 
 // RenderOption configures the behavior of a single Render call
@@ -475,34 +474,6 @@ func WithEncryptHistory(encrypt bool) RenderOption {
 func WithClearHistory(clear bool) RenderOption {
 	return func(config *renderConfig) {
 		config.clearHistory = &clear
-	}
-}
-
-// WithMergeProps specifies prop keys that should be appended during navigation
-func WithMergeProps(props ...string) RenderOption {
-	return func(config *renderConfig) {
-		config.mergeProps = append(config.mergeProps, props...)
-	}
-}
-
-// WithPrependProps specifies prop keys that should be prepended during navigation
-func WithPrependProps(props ...string) RenderOption {
-	return func(config *renderConfig) {
-		config.prependProps = append(config.prependProps, props...)
-	}
-}
-
-// WithDeepMergeProps specifies prop keys that should be deep merged during navigation
-func WithDeepMergeProps(props ...string) RenderOption {
-	return func(config *renderConfig) {
-		config.deepMergeProps = append(config.deepMergeProps, props...)
-	}
-}
-
-// WithMatchPropsOn specifies prop keys used for matching when merging
-func WithMatchPropsOn(props ...string) RenderOption {
-	return func(config *renderConfig) {
-		config.matchPropsOn = append(config.matchPropsOn, props...)
 	}
 }
 
@@ -571,10 +542,10 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		Version:        i.version,
 		EncryptHistory: config.encryptHistory != nil && *config.encryptHistory,
 		ClearHistory:   config.clearHistory != nil && *config.clearHistory,
-		MergeProps:     slices.Concat(config.mergeProps, p.mergeProps),
-		PrependProps:   slices.Concat(config.prependProps, p.prependProps),
-		DeepMergeProps: config.deepMergeProps,
-		MatchPropsOn:   config.matchPropsOn,
+		MergeProps:     p.mergeProps,
+		PrependProps:   p.prependProps,
+		DeepMergeProps: p.deepMergeProps,
+		MatchPropsOn:   p.matchPropsOn,
 		DeferredProps:  p.deferredProps,
 		OnceProps:      p.onceProps,
 		ScrollProps:    p.scrollProps,
