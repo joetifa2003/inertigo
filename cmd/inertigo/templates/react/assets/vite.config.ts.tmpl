@@ -7,7 +7,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     react(),
     inertigo({
       entryPoint: "./ts/app.tsx",
-      ssrEntryPoint: "./ts/ssr.tsx",
+      {{ if .SSR }}ssrEntryPoint: "./ts/ssr.tsx",{{ end }}
     }),
   ],
 }));

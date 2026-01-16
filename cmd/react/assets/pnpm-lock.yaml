@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      inertigo-vite:
+        specifier: ^0.1.0
+        version: 0.1.0(vite@7.3.0(@types/node@25.0.3)(lightningcss@1.30.2))
     devDependencies:
       '@inertiajs/react':
         specifier: ^2.3.8
@@ -615,6 +619,11 @@ packages:
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
+
+  inertigo-vite@0.1.0:
+    resolution: {integrity: sha512-xK0hzOWxXObCaqSoM25ELtMXewKCkrlCJyHgOEXUZE3q4396frbFYUE13f4T7qRJIcy2rz0KM0KmzeoO6zMPCw==}
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0 || ^7.0.0
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -1401,6 +1410,10 @@ snapshots:
   hasown@2.0.2:
     dependencies:
       function-bind: 1.1.2
+
+  inertigo-vite@0.1.0(vite@7.3.0(@types/node@25.0.3)(lightningcss@1.30.2)):
+    dependencies:
+      vite: 7.3.0(@types/node@25.0.3)(lightningcss@1.30.2)
 
   js-tokens@4.0.0: {}
 

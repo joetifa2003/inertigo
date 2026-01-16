@@ -1,5 +1,5 @@
 {
-  "name": "vite-plugin-inertigo",
+  "name": "inertigo-vite",
   "version": "0.1.0",
   "description": "Vite plugin for Inertigo - The Inertia.js adapter for Go",
   "type": "module",

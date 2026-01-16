@@ -1,15 +1,15 @@
-# vite-plugin-inertigo
+# inertigo-vite
 
 Vite plugin for [Inertigo](https://github.com/joetifa2003/inertigo) - The Inertia.js adapter for Go.
 
 ## Installation
 
 ```bash
-npm install vite-plugin-inertigo --save-dev
+npm install inertigo-vite --save-dev
 # or
-pnpm add vite-plugin-inertigo -D
+pnpm add inertigo-vite -D
 # or
-yarn add vite-plugin-inertigo --dev
+yarn add inertigo-vite --dev
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ yarn add vite-plugin-inertigo --dev
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import inertigo from "vite-plugin-inertigo";
+import inertigo from "inertigo-vite";
 
 export default defineConfig({
   plugins: [

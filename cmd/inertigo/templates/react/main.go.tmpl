@@ -1,0 +1,66 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"log/slog"
+	"net/http"
+	"os"
+
+	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/qjs"
+	"github.com/joetifa2003/inertigo/vite"
+)
+
+func main() {
+	isDev := flag.Bool("dev", false, "development mode")
+	flag.Parse()
+
+	bundler, err := vite.New(
+		os.DirFS("assets/dist"),
+		vite.WithDevMode(*isDev),
+		vite.WithReactRefresh(),
+	)
+	must(err)
+
+	i, err := inertia.New(
+		bundler,
+		inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil))),
+		inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+        {{ if .SSR }}
+		inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+			return qjs.New(
+				qjs.WithSrcPath("assets/dist/server/ssr.js"),
+				qjs.WithClusterSize(16),
+			)
+		}),
+        {{ end }}
+		// inertia.WithCSRF(true, false), // Enable CSRF if needed
+	)
+	must(err)
+
+	mux := http.NewServeMux()
+
+	mux.Handle(bundler.AssetPrefix(), bundler.Handler())
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		err = i.Render(w, r, "index", inertia.Props{
+            "message": "Hello from Go!",
+        })
+		if err != nil {
+			slog.Error(err.Error())
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	})
+
+	i.Logger().Log(context.Background(), slog.LevelInfo, "starting server", slog.String("url", "http://localhost:8001"))
+
+	http.ListenAndServe(":8001", i.Middleware(mux))
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
