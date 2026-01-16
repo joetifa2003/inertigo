@@ -1,0 +1,58 @@
+{
+  "name": "vite-plugin-inertigo",
+  "version": "0.1.0",
+  "description": "Vite plugin for Inertigo - The Inertia.js adapter for Go",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "vite",
+    "vite-plugin",
+    "inertia",
+    "inertigo",
+    "go",
+    "ssr",
+    "server-side-rendering"
+  ],
+  "author": "joetifa2003",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joetifa2003/inertigo.git",
+    "directory": "vite-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/joetifa2003/inertigo/issues"
+  },
+  "homepage": "https://github.com/joetifa2003/inertigo#readme",
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "tsdown": "^0.20.0-beta.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}
