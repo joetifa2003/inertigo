@@ -1,0 +1,219 @@
+---
+title: Quick Start
+description: A complete example to get you up and running.
+---
+
+Let's build a simple user registration form with inertigo. This example shows the complete flow: rendering pages, handling forms, validation errors, and flash messages.
+
+## The Handler
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "log"
+    "net/http"
+    "os"
+    "strings"
+
+    inertia "github.com/joetifa2003/inertigo"
+    "github.com/joetifa2003/inertigo/vite"
+)
+
+func main() {
+    bundler, _ := vite.New(
+        os.DirFS("assets/dist"),
+        vite.WithDevMode(true),
+        vite.WithReactRefresh(),
+    )
+
+    i, _ := inertia.New(
+        bundler,
+        inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+    )
+
+    mux := http.NewServeMux()
+    mux.Handle(bundler.AssetPrefix(), bundler.Handler())
+
+    // Show registration form
+    mux.HandleFunc("GET /register", func(w http.ResponseWriter, r *http.Request) {
+        i.Render(w, r, "register", nil)
+    })
+
+    // Handle form submission
+    mux.HandleFunc("POST /register", func(w http.ResponseWriter, r *http.Request) {
+        var body struct {
+            Name     string `json:"name"`
+            Email    string `json:"email"`
+            Password string `json:"password"`
+        }
+        json.NewDecoder(r.Body).Decode(&body)
+
+        // Validate
+        errors := map[string]any{}
+        if body.Name == "" {
+            errors["name"] = "Name is required"
+        }
+        if body.Email == "" {
+            errors["email"] = "Email is required"
+        } else if !strings.Contains(body.Email, "@") {
+            errors["email"] = "Invalid email address"
+        }
+        if body.Password == "" {
+            errors["password"] = "Password is required"
+        }
+
+        // If validation fails, redirect back with errors
+        if err := i.RenderErrors(w, r, errors); err != nil {
+            log.Println(err)
+            return
+        }
+        if len(errors) > 0 {
+            return
+        }
+
+        // Success! Create the user (fake it here)
+        // db.CreateUser(body.Name, body.Email, body.Password)
+
+        // Flash a success message and redirect
+        i.Flash(w, r, "success", "Registration successful!")
+        i.Redirect(w, r, "/")
+    })
+
+    // Home page
+    mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+        i.Render(w, r, "index", nil)
+    })
+
+    log.Println("Server running on http://localhost:8080")
+    http.ListenAndServe(":8080", i.Middleware(mux))
+}
+```
+
+## The React Components
+
+### Layout Component
+
+Create `src/components/Layout.tsx`:
+
+```tsx
+import { usePage } from '@inertiajs/react'
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  const { flash } = usePage().props as { flash?: { success?: string } }
+
+  return (
+    <div className="container">
+      {flash?.success && (
+        <div className="alert success">{flash.success}</div>
+      )}
+      {children}
+    </div>
+  )
+}
+```
+
+### Registration Page
+
+Create `src/pages/register.tsx`:
+
+```tsx
+import { useForm } from '@inertiajs/react'
+import Layout from '../components/Layout'
+
+export default function Register() {
+  const { data, setData, post, processing, errors } = useForm({
+    name: '',
+    email: '',
+    password: '',
+  })
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    post('/register')
+  }
+
+  return (
+    <Layout>
+      <h1>Register</h1>
+      <form onSubmit={submit}>
+        <div>
+          <label htmlFor="name">Name</label>
+          <input
+            id="name"
+            value={data.name}
+            onChange={e => setData('name', e.target.value)}
+          />
+          {errors.name && <span className="error">{errors.name}</span>}
+        </div>
+
+        <div>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            value={data.email}
+            onChange={e => setData('email', e.target.value)}
+          />
+          {errors.email && <span className="error">{errors.email}</span>}
+        </div>
+
+        <div>
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            value={data.password}
+            onChange={e => setData('password', e.target.value)}
+          />
+          {errors.password && <span className="error">{errors.password}</span>}
+        </div>
+
+        <button type="submit" disabled={processing}>
+          Register
+        </button>
+      </form>
+    </Layout>
+  )
+}
+```
+
+### Home Page
+
+Create `src/pages/index.tsx`:
+
+```tsx
+import { Link } from '@inertiajs/react'
+import Layout from '../components/Layout'
+
+export default function Index() {
+  return (
+    <Layout>
+      <h1>Welcome!</h1>
+      <p>
+        <Link href="/register">Create an account</Link>
+      </p>
+    </Layout>
+  )
+}
+```
+
+## How It Works
+
+1. User visits `/register` - your Go handler renders the `register` component
+2. User fills out the form and submits
+3. Inertia sends a POST request with the form data as JSON
+4. Your Go handler validates and returns errors if any
+5. `RenderErrors` flashes errors to the session and redirects back
+6. The form re-renders with error messages
+7. On success, `Flash` stores a message and `Redirect` sends them home
+8. The home page displays the flash message
+
+No API endpoints. No client-side validation logic duplicated. Just your Go handler passing data to your React components.
+
+## Next Steps
+
+- [The Inertia Instance](/core-concepts/the-inertia-instance/) - Configuration options
+- [Props](/props/overview/) - Different ways to pass data
+- [Validation](/data/validation-errors/) - More on error handling

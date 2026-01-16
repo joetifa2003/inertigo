@@ -1,0 +1,173 @@
+---
+title: Installation
+description: Getting inertigo set up in your Go project.
+---
+
+This guide walks you through adding inertigo to your Go project and setting up a frontend with Vite.
+
+## Prerequisites
+
+- Go 1.21 or later
+- Node.js 18+ (for frontend tooling)
+
+## Install the Go Package
+
+Add inertigo to your Go module:
+
+```bash
+go get github.com/joetifa2003/inertigo
+```
+
+This installs the core package along with the Vite bundler and QuickJS SSR engine.
+
+## Set Up Your Frontend
+
+Create a new directory for your frontend assets and initialize a Vite project. Here's an example with React:
+
+```bash
+mkdir assets && cd assets
+npm create vite@latest . -- --template react-ts
+npm install
+npm install @inertiajs/react
+```
+
+### Configure Vite
+
+Update your `vite.config.ts` to work with inertigo:
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    manifest: true,
+    outDir: 'dist',
+    rollupOptions: {
+      input: 'src/main.tsx',
+    },
+  },
+})
+```
+
+### Create the Entry Point
+
+Update `src/main.tsx`:
+
+```tsx
+import { createInertiaApp } from '@inertiajs/react'
+import { createRoot } from 'react-dom/client'
+
+createInertiaApp({
+  resolve: name => {
+    const pages = import.meta.glob('./pages/**/*.tsx', { eager: true })
+    return pages[`./pages/${name}.tsx`]
+  },
+  setup({ el, App, props }) {
+    createRoot(el).render(<App {...props} />)
+  },
+})
+```
+
+### Create Your First Page
+
+Create `src/pages/index.tsx`:
+
+```tsx
+export default function Index() {
+  return (
+    <div>
+      <h1>Hello from Inertia!</h1>
+    </div>
+  )
+}
+```
+
+## Set Up Your Go Server
+
+Create your root HTML template (`assets/index.html`):
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My App</title>
+  {{ .InertiaHead }}
+  {{ vite "src/main.tsx" }}
+</head>
+<body>
+  {{ .InertiaBody }}
+</body>
+</html>
+```
+
+Now wire it up in Go:
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+    "os"
+
+    inertia "github.com/joetifa2003/inertigo"
+    "github.com/joetifa2003/inertigo/vite"
+)
+
+func main() {
+    bundler, err := vite.New(
+        os.DirFS("assets/dist"),
+        vite.WithDevMode(true),
+        vite.WithReactRefresh(),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    i, err := inertia.New(
+        bundler,
+        inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    mux := http.NewServeMux()
+    
+    // Serve static assets in production
+    mux.Handle(bundler.AssetPrefix(), bundler.Handler())
+    
+    // Your first route
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        i.Render(w, r, "index", nil)
+    })
+
+    log.Println("Starting server on :8080")
+    http.ListenAndServe(":8080", i.Middleware(mux))
+}
+```
+
+## Running in Development
+
+Start the Vite dev server:
+
+```bash
+cd assets && npm run dev
+```
+
+In another terminal, run your Go server:
+
+```bash
+go run . -dev
+```
+
+Visit `http://localhost:8080` and you should see your Inertia app running with hot module replacement.
+
+## Next Steps
+
+- [Quick Start](/getting-started/quick-start/) - A more complete example
+- [Core Concepts](/core-concepts/the-inertia-instance/) - Understand how inertigo works

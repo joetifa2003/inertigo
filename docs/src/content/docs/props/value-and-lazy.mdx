@@ -1,0 +1,175 @@
+---
+title: Value and Lazy Props
+description: The fundamental prop types in inertigo.
+---
+
+`Value` and `Lazy` are the two prop types you'll use most often. They cover the majority of use cases for passing data to your components.
+
+## Value Props
+
+Use `Value` when you already have the data computed:
+
+```go
+user := db.GetUser(id)
+
+i.Render(w, r, "users/Show", inertia.Props{
+    "user": inertia.Value(user),
+})
+```
+
+`Value` accepts any type that can be JSON marshaled:
+
+```go
+// Structs
+"user": inertia.Value(User{ID: 1, Name: "Joe"}),
+
+// Slices
+"tags": inertia.Value([]string{"go", "react", "inertia"}),
+
+// Maps
+"settings": inertia.Value(map[string]any{"theme": "dark"}),
+
+// Primitives
+"count": inertia.Value(42),
+"enabled": inertia.Value(true),
+```
+
+### When to Use Value
+
+Use `Value` when:
+
+- The data is already available (no need to compute it)
+- The computation is cheap
+- You've already fetched the data for another reason
+
+```go
+func ShowUser(w http.ResponseWriter, r *http.Request) {
+    // Already fetching user for auth - use Value
+    user := getAuthenticatedUser(r)
+    
+    i.Render(w, r, "Dashboard", inertia.Props{
+        "user": inertia.Value(user),
+    })
+}
+```
+
+## Lazy Props
+
+Use `Lazy` when the data needs to be computed at render time:
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "stats": inertia.Lazy(func(ctx context.Context) (any, error) {
+        return db.GetDashboardStats()
+    }),
+})
+```
+
+The function signature is:
+
+```go
+func(ctx context.Context) (any, error)
+```
+
+The context comes from the HTTP request, so you can use it for cancellation or passing values:
+
+```go
+"data": inertia.Lazy(func(ctx context.Context) (any, error) {
+    userID := ctx.Value("userID").(int)
+    return db.GetUserData(ctx, userID)
+}),
+```
+
+### Why Lazy Matters
+
+The key advantage of `Lazy` is that the function only runs when the prop is actually needed.
+
+On a full page load, all non-optional props are evaluated. But on a partial reload:
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user":   inertia.Lazy(fetchUser),   // Called if requested
+    "stats":  inertia.Lazy(fetchStats),  // Called if requested
+    "alerts": inertia.Lazy(fetchAlerts), // Called if requested
+})
+```
+
+If the frontend only requests `alerts`:
+
+```tsx
+router.reload({ only: ['alerts'] })
+```
+
+Then only `fetchAlerts` runs. The other two functions are never called.
+
+### Error Handling
+
+If your lazy function returns an error, the entire render fails:
+
+```go
+"data": inertia.Lazy(func(ctx context.Context) (any, error) {
+    data, err := db.Query()
+    if err != nil {
+        return nil, err  // Render will return this error
+    }
+    return data, nil
+}),
+```
+
+Handle errors in your Render call:
+
+```go
+if err := i.Render(w, r, "Page", props); err != nil {
+    log.Printf("Render failed: %v", err)
+    http.Error(w, "Internal error", 500)
+}
+```
+
+## Value vs Lazy
+
+The practical difference:
+
+```go
+// Value: computation happens NOW
+result := expensiveOperation()
+"data": inertia.Value(result),
+
+// Lazy: computation happens MAYBE LATER
+"data": inertia.Lazy(func(ctx context.Context) (any, error) {
+    return expensiveOperation()
+}),
+```
+
+With `Lazy`, if the prop isn't needed (e.g., partial reload doesn't request it), the expensive operation is skipped entirely.
+
+### When Lazy Saves Work
+
+**Partial reloads**: Only requested props are computed
+
+```go
+"notifications": inertia.Lazy(fetchNotifications),  // Only runs if requested
+"messages":      inertia.Lazy(fetchMessages),       // Only runs if requested
+```
+
+**Conditional rendering**: If you have logic that might exclude a prop anyway, Lazy prevents unnecessary computation.
+
+## Type Safety
+
+Both `Value` and `Lazy` work with your Go types. The data is JSON marshaled before being sent:
+
+```go
+type User struct {
+    ID    int    `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email,omitempty"`
+}
+
+"user": inertia.Value(User{ID: 1, Name: "Joe"}),
+```
+
+Add JSON tags to control the output format.
+
+## Next Steps
+
+- [Deferred Props](/props/deferred/) - Load data after initial render
+- [Always Props](/props/always/) - Force inclusion on partial reloads

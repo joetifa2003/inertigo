@@ -1,0 +1,70 @@
+---
+title: What is Inertia.js?
+description: Understanding the problem Inertia solves and how it works.
+---
+
+If you've ever tried to add a modern JavaScript frontend to a server-side application, you know the pain. Suddenly you need an API, authentication tokens, client-side state management, and two separate codebases to maintain. Inertia.js was built to eliminate this complexity.
+
+## The Traditional Divide
+
+Web development has split into two camps:
+
+**Server-side rendering** - You build controllers, query your database, and render HTML templates. It's simple and works great, but users expect instant page transitions and the smooth feel of modern apps.
+
+**Single-page applications** - You get the buttery-smooth UX, but now you're building two applications: a backend API and a frontend app that consumes it. Every piece of data needs to be serialized to JSON, sent over HTTP, and parsed on the client. You duplicate validation logic. You manage authentication in two places. It's a lot of work.
+
+## Inertia's Approach
+
+Inertia takes a different path. Instead of sending HTML or JSON, your server sends the name of a JavaScript component and the props it needs:
+
+```json
+{
+  "component": "users/Show",
+  "props": {
+    "user": { "id": 1, "name": "Joe", "email": "joe@example.com" }
+  },
+  "url": "/users/1"
+}
+```
+
+The Inertia client-side library receives this, looks up the component, and renders it with those props. When the user clicks a link, Inertia intercepts it, makes an XHR request to your server, gets back the new component and props, and swaps the page - all without a full page reload.
+
+The key insight: **your server already knows what data the page needs**. Why serialize it to an API response, only to fetch it again from the client? Just send it directly.
+
+## How It Works
+
+Here's the request/response cycle:
+
+1. User visits `/users/1`
+2. Server runs your handler, fetches user data
+3. Server responds with the component name and props
+4. On first visit, this comes wrapped in your HTML template
+5. Inertia hydrates the page as a full SPA
+6. Subsequent navigation uses XHR requests
+7. Inertia swaps components client-side - instant page transitions
+
+The brilliant part: from your server's perspective, you're just rendering pages. From your user's perspective, they're using a modern SPA. You get both worlds.
+
+## What You Keep
+
+With Inertia, you keep using:
+
+- **Server-side routing** - Define routes in your Go application
+- **Server-side controllers** - Your handlers fetch data and render pages
+- **Server-side validation** - Validate forms in Go, errors flow to your components
+- **Sessions and cookies** - Authentication works exactly as you'd expect
+- **Your existing patterns** - No new paradigms to learn
+
+## What You Gain
+
+And you gain:
+
+- **Client-side navigation** - Instant page transitions
+- **Persistent layout state** - Modals, scroll position, form state preserved across pages
+- **Modern component architecture** - React, Vue, or Svelte
+- **No API to maintain** - Zero endpoints, zero versioning headaches
+- **Real SSR** - inertigo renders your components on the server for fast initial loads
+
+## Next Steps
+
+Ready to see how this works in Go? Check out [why inertigo](/introduction/why-inertigo/) or jump straight to [installation](/getting-started/installation/).

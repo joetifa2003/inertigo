@@ -1,0 +1,134 @@
+---
+title: Props Overview
+description: Understanding prop types in inertigo.
+---
+
+Props are how you pass data from your Go handlers to your frontend components. Unlike simple JSON marshaling, inertigo's prop system gives you fine-grained control over when and how data is loaded.
+
+## The Basics
+
+Props are passed as a map to `Render`:
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user":  inertia.Value(currentUser),
+    "stats": inertia.Lazy(func(ctx context.Context) (any, error) {
+        return db.GetStats()
+    }),
+})
+```
+
+Each prop value must implement the `Prop` interface. The package provides several built-in prop types.
+
+## Prop Types at a Glance
+
+| Type | Included On | Use Case |
+|------|-------------|----------|
+| `Value` | Always | Static or already-computed data |
+| `Lazy` | Always (evaluated on demand) | Computed data like DB queries |
+| `Always` | Always (even partial reloads) | Data that must be fresh on every request |
+| `Optional` | Only when requested | Large data that's rarely needed |
+| `Deferred` | After initial load | Heavy data that can wait |
+| `Once` | First visit only | Expensive data that doesn't change |
+| `Scroll` | With merge metadata | Infinite scrolling/pagination |
+
+## When to Use Each
+
+### Value - For Ready Data
+
+Use `Value` when you already have the data:
+
+```go
+"settings": inertia.Value(config.AppSettings),
+"version":  inertia.Value("1.0.0"),
+```
+
+### Lazy - For Computed Data
+
+Use `Lazy` when the data needs to be computed:
+
+```go
+"users": inertia.Lazy(func(ctx context.Context) (any, error) {
+    return db.GetUsers()
+}),
+```
+
+The function is only called when the prop is actually included in the response. On partial reloads that don't request this prop, the DB query never runs.
+
+### Always - For Critical Data
+
+Use `Always` for data that must be fresh on every request, even partial reloads:
+
+```go
+"notifications": inertia.Always(unreadCount),
+```
+
+### Optional - For On-Demand Data
+
+Use `Optional` for large data that the frontend can request when needed:
+
+```go
+"activityLog": inertia.Optional(func(ctx context.Context) (any, error) {
+    return db.GetRecentActivity(userID)
+}),
+```
+
+This prop won't be included unless the frontend explicitly requests it.
+
+### Deferred - For Non-Blocking Loads
+
+Use `Deferred` for data that can load after the page renders:
+
+```go
+"analytics": inertia.Deferred(func(ctx context.Context) (any, error) {
+    return slowAnalyticsQuery()
+}),
+```
+
+The page loads fast with a placeholder, then the data arrives.
+
+### Once - For Expensive, Stable Data
+
+Use `Once` for data that's expensive to compute but won't change:
+
+```go
+"permissions": inertia.Once(func(ctx context.Context) (any, error) {
+    return computePermissions(userID)
+}),
+```
+
+### Scroll - For Infinite Lists
+
+Use `Scroll` for paginated data that merges on scroll:
+
+```go
+"posts": inertia.Scroll(func(ctx context.Context) ([]Post, error) {
+    return db.GetPosts(page, 20)
+}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+    CurrentPage: page,
+    NextPage:    page + 1,
+})),
+```
+
+## Props and Partial Reloads
+
+Props work in concert with Inertia's partial reload feature. When the frontend requests only specific props, only those props are evaluated and returned.
+
+```tsx
+// Frontend
+router.reload({ only: ['notifications'] })
+```
+
+```go
+// Backend - only "notifications" is evaluated
+"notifications": inertia.Lazy(...), // This runs
+"users":         inertia.Lazy(...), // This doesn't
+```
+
+This makes partial reloads extremely efficient.
+
+## Next Steps
+
+- [Value and Lazy Props](/props/value-and-lazy/) - The most common prop types
+- [Deferred Props](/props/deferred/) - Improve perceived performance
+- [Scroll Props](/props/scroll/) - Infinite scrolling support

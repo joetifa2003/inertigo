@@ -1,0 +1,131 @@
+---
+title: Flash Messages
+description: Displaying one-time messages after redirects.
+---
+
+Flash messages are session-stored data that's available for the next request only. They're perfect for success notifications, alerts, or any data that should appear once after a redirect.
+
+## Basic Usage
+
+Store a flash message before redirecting:
+
+```go
+func CreateUser(w http.ResponseWriter, r *http.Request) {
+    // ... create user ...
+    
+    i.Flash(w, r, "success", "User created successfully!")
+    i.Redirect(w, r, "/users")
+}
+```
+
+The message will be available on the next page load, then automatically cleared.
+
+## Multiple Values
+
+Use `FlashMultiple` to store several values:
+
+```go
+i.FlashMultiple(w, r, map[string]any{
+    "success": "Profile updated",
+    "notice":  "Some fields were normalized",
+})
+```
+
+## Accessing Flash Data
+
+Flash data is sent to the frontend in the `flash` property of the page object:
+
+```tsx
+// React
+import { usePage } from '@inertiajs/react'
+
+function Layout({ children }) {
+  const { flash } = usePage().props
+  
+  return (
+    <div>
+      {flash?.success && (
+        <div className="alert success">{flash.success}</div>
+      )}
+      {flash?.error && (
+        <div className="alert error">{flash.error}</div>
+      )}
+      {children}
+    </div>
+  )
+}
+```
+
+## Common Patterns
+
+### Success Messages
+
+```go
+i.Flash(w, r, "success", "Item saved!")
+i.Redirect(w, r, "/items")
+```
+
+### Error Messages
+
+```go
+i.Flash(w, r, "error", "Something went wrong")
+i.RedirectBack(w, r)
+```
+
+### Complex Data
+
+```go
+i.Flash(w, r, "notification", map[string]any{
+    "type":    "info",
+    "title":   "Update Available",
+    "message": "A new version is ready to install.",
+    "action":  "/update",
+})
+```
+
+## How It Works
+
+1. `Flash` stores data in the session
+2. User is redirected
+3. On the next request, the middleware loads flash data
+4. Flash data is included in the response
+5. The flash data is cleared from the session
+
+This is why flash messages appear once - they're consumed on read.
+
+## Session Configuration
+
+By default, inertigo uses an in-memory session. For production, provide a persistent implementation:
+
+```go
+type RedisSession struct {
+    client *redis.Client
+}
+
+func (s *RedisSession) Flash(w http.ResponseWriter, r *http.Request, values map[string]any) error {
+    sessionID := getSessionID(r)
+    return s.client.Set(ctx, "flash:"+sessionID, values, 10*time.Minute)
+}
+
+func (s *RedisSession) Get(w http.ResponseWriter, r *http.Request) (map[string]any, error) {
+    sessionID := getSessionID(r)
+    data := s.client.GetDel(ctx, "flash:"+sessionID)
+    return data, nil
+}
+
+// Use it
+inertia.WithSession(&RedisSession{client: redisClient})
+```
+
+## Flash vs Shared vs Props
+
+| Feature | Flash | Shared | Props |
+|---------|-------|--------|-------|
+| Scope | Next request only | Current request | Single page |
+| Survives redirect | Yes | No | No |
+| Use case | Notifications | Auth data | Page data |
+
+## Next Steps
+
+- [Validation Errors](/data/validation-errors/) - Special handling for form errors
+- [Shared Props](/data/shared-props/) - Request-scoped global data

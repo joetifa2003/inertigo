@@ -1,0 +1,177 @@
+---
+title: QuickJS SSR Engine
+description: Server-side rendering with QuickJS.
+---
+
+The QuickJS SSR engine runs your React/Vue/Svelte components in a JavaScript runtime embedded in Go. No Node.js server required.
+
+## What is QuickJS?
+
+QuickJS is a lightweight JavaScript engine written in C. inertigo uses a Go binding to run your SSR bundle directly in your Go process.
+
+Benefits:
+- **Single binary deployment** - No Node.js to install
+- **Fast startup** - Bytecode compilation for quick init
+- **Pooled runtimes** - Handle concurrent requests
+
+## Setup
+
+```go
+import "github.com/joetifa2003/inertigo/qjs"
+
+i, _ := inertia.New(
+    bundler,
+    inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+        return qjs.New(
+            qjs.WithSrcPath("dist/server/ssr.js"),
+            qjs.WithClusterSize(16),
+        )
+    }),
+)
+```
+
+## Options
+
+### WithSrc
+
+Load SSR bundle from a string:
+
+```go
+qjs.WithSrc(ssrBundleString)
+```
+
+### WithSrcPath
+
+Load from a file path:
+
+```go
+qjs.WithSrcPath("dist/server/ssr.js")
+```
+
+### WithSrcFS
+
+Load from an embedded filesystem:
+
+```go
+//go:embed dist/server
+var serverFS embed.FS
+
+qjs.WithSrcFS(serverFS, "dist/server/ssr.js")
+```
+
+### WithClusterSize
+
+Set the pool size for concurrent rendering:
+
+```go
+qjs.WithClusterSize(16)
+```
+
+QuickJS runtimes are single-threaded. The cluster maintains a pool of runtimes to handle concurrent requests. Set this to at least 2x your expected concurrent SSR requests.
+
+## SSR Bundle Requirements
+
+Your SSR bundle must export a `renderPage` function:
+
+```typescript
+// src/ssr.tsx
+import { createInertiaApp } from '@inertiajs/react'
+import { renderToString } from 'react-dom/server'
+import { createElement } from 'react'
+
+export async function renderPage(page) {
+  return await createInertiaApp({
+    page,
+    render: renderToString,
+    resolve: name => {
+      const pages = import.meta.glob('./pages/**/*.tsx', { eager: true })
+      return pages[`./pages/${name}.tsx`]
+    },
+    setup: ({ App, props }) => createElement(App, props),
+  })
+}
+```
+
+Build it with Vite:
+
+```bash
+vite build --ssr src/ssr.tsx --outDir dist/server
+```
+
+## Return Format
+
+The `renderPage` function should return:
+
+```typescript
+{
+  head: string[],  // Tags to insert in <head>
+  body: string,    // Rendered component HTML
+}
+```
+
+Inertia's `createInertiaApp` returns this format when you provide a `render` function.
+
+## How It Works
+
+1. **Startup**: SSR bundle is compiled to QuickJS bytecode
+2. **Pool creation**: N runtime instances are created
+3. **Request**: A runtime is acquired from the pool
+4. **Render**: `renderPage(pageObject)` is called
+5. **Response**: HTML is returned, runtime goes back to pool
+
+The bytecode compilation happens once. Subsequent runtimes load instantly from bytecode.
+
+## Performance Tips
+
+### Pool Sizing
+
+Too few runtimes = requests wait in queue:
+
+```go
+qjs.WithClusterSize(4)  // 4 concurrent SSR at most
+```
+
+Too many = memory waste. Start with 2x CPU cores and adjust based on load.
+
+### Lazy Initialization
+
+The SSR engine is created lazily on first request:
+
+```go
+inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+    // This runs on first SSR request, not at startup
+    return qjs.New(...)
+})
+```
+
+This keeps app startup fast.
+
+## Logging
+
+Enable logging to see SSR performance:
+
+```go
+inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+```
+
+Output:
+
+```
+level=INFO msg="starting ssr engine"
+level=INFO msg="ssr engine started" engine=qjs dur=150ms
+level=INFO msg="ssr engine rendered page" engine=qjs dur=5ms
+```
+
+## Limitations
+
+QuickJS is ES2020 compliant but doesn't have:
+
+- Node.js APIs (fs, path, etc.)
+- Browser APIs (window, document, etc.)
+
+Your SSR bundle should be browser-compatible. React's `renderToString` and similar work fine.
+
+## Next Steps
+
+- [Vite Bundler](/bundlers/vite/) - Asset handling
+- [SSR](/advanced/server-side-rendering/) - SSR concepts

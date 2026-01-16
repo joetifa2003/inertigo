@@ -1,0 +1,136 @@
+---
+title: Root Template
+description: The HTML shell for your Inertia pages.
+---
+
+The root template is your HTML shell - the wrapper that holds your Inertia app. It's a standard Go HTML template with a few special placeholders.
+
+## Basic Template
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My App</title>
+    {{ .InertiaHead }}
+    {{ vite "src/main.tsx" }}
+</head>
+<body>
+    {{ .InertiaBody }}
+</body>
+</html>
+```
+
+## Template Data
+
+Your template receives a `RootHtmlView` struct with two fields:
+
+### InertiaHead
+
+Contains any `<head>` elements rendered by SSR. This includes `<title>`, `<meta>` tags, and other elements your page components add to the head.
+
+```html
+<head>
+    {{ .InertiaHead }}
+</head>
+```
+
+If SSR is disabled, this will be empty.
+
+### InertiaBody
+
+Contains either:
+
+- With SSR: The server-rendered HTML of your page
+- Without SSR: Just the data div that Inertia hydrates
+
+```html
+<body>
+    {{ .InertiaBody }}
+</body>
+```
+
+Without SSR, this outputs:
+
+```html
+<div id="app" data-page='{"component":"Index","props":{...}}'></div>
+```
+
+With SSR, it includes the fully rendered component markup plus the data attribute.
+
+## Bundler Template Functions
+
+The bundler provides template functions for loading assets. The Vite bundler adds a `vite` function:
+
+```html
+{{ vite "src/main.tsx" }}
+```
+
+In development, this outputs:
+
+```html
+<script type="module" src="http://localhost:5173/@vite/client"></script>
+<script type="module" src="http://localhost:5173/src/main.tsx"></script>
+```
+
+In production, it reads the Vite manifest and outputs the correct hashed filenames:
+
+```html
+<link rel="stylesheet" href="/static/assets/main-abc123.css">
+<script type="module" src="/static/assets/main-def456.js"></script>
+```
+
+## Loading the Template
+
+Use one of the root template options:
+
+```go
+// From filesystem path
+inertia.WithRootHtmlPath("templates/app.html")
+
+// From embedded filesystem (recommended for production)
+//go:embed templates
+var templatesFS embed.FS
+
+inertia.WithRooHtmlPathFS(templatesFS, "templates/app.html")
+```
+
+## Complete Example
+
+Here's a more complete template with meta tags and external resources:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="My awesome app">
+    
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    {{ .InertiaHead }}
+    {{ vite "src/main.tsx" }}
+</head>
+<body class="antialiased">
+    {{ .InertiaBody }}
+</body>
+</html>
+```
+
+## Tips
+
+1. **Place assets before InertiaHead** - Your CSS should load before any SSR-provided styles to avoid flash of unstyled content
+
+2. **Put vite in the head** - Modern bundlers use `<script type="module">` which is deferred by default
+
+3. **Keep it minimal** - The root template is shared across all pages. Page-specific elements should be in your page components
+
+## Next Steps
+
+- [Vite Bundler](/bundlers/vite/) - Configure Vite integration
+- [SSR](/advanced/server-side-rendering/) - Enable server-side rendering

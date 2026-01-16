@@ -1,0 +1,143 @@
+---
+title: Partial Reloads
+description: Fetching only the data you need.
+---
+
+Partial reloads let the frontend request only specific props instead of reloading all page data. This is a key performance optimization in Inertia.
+
+## How It Works
+
+On a partial reload:
+
+1. Frontend specifies which props it wants (`only: ['posts']`)
+2. Inertia sends `X-Inertia-Partial-Data: posts` header
+3. Server only computes and returns requested props
+4. Frontend merges new data with existing page state
+
+## Frontend Usage
+
+```tsx
+import { router } from '@inertiajs/react'
+
+// Reload only the "posts" prop
+router.reload({ only: ['posts'] })
+
+// Exclude specific props
+router.reload({ except: ['heavyData'] })
+
+// With additional parameters
+router.reload({
+  only: ['posts'],
+  data: { page: 2 },  // Query params
+})
+```
+
+## Server Behavior
+
+Props use `shouldInclude` to determine if they're needed:
+
+```go
+// Lazy prop - only evaluated if requested
+"posts": inertia.Lazy(func(ctx context.Context) (any, error) {
+    return db.GetPosts()  // Only runs if "posts" is requested
+}),
+
+// Value prop - included unless excluded
+"user": inertia.Value(user),  // Skipped if not in partial data
+```
+
+On a partial reload for `only: ['posts']`:
+
+| Prop | Included? |
+|------|-----------|
+| `posts` | Yes |
+| `user` | No |
+| `notifications` (Always) | Yes |
+
+## Props That Always Include
+
+`Always` props are included even when not requested:
+
+```go
+"notifications": inertia.Always(unreadCount),
+```
+
+This ensures critical data stays fresh.
+
+## Request Headers
+
+Partial reloads use these headers:
+
+| Header | Purpose |
+|--------|---------|
+| `X-Inertia-Partial-Data` | Comma-separated props to include |
+| `X-Inertia-Partial-Except` | Comma-separated props to exclude |
+| `X-Inertia-Partial-Component` | Must match current component |
+
+Example:
+
+```
+X-Inertia: true
+X-Inertia-Partial-Data: posts,comments
+X-Inertia-Partial-Component: blog/Show
+```
+
+## Component Matching
+
+Partial reloads only work when the component matches. If you navigate to a different page, it's a full load:
+
+```go
+// Request for "blog/Show" with X-Inertia-Partial-Component: blog/Show
+// -> Partial reload works
+
+// Request for "blog/Index" with X-Inertia-Partial-Component: blog/Show  
+// -> Full load (different component)
+```
+
+## Common Patterns
+
+### Polling for Updates
+
+```tsx
+useEffect(() => {
+  const interval = setInterval(() => {
+    router.reload({ only: ['notifications'] })
+  }, 30000)
+  return () => clearInterval(interval)
+}, [])
+```
+
+### Pagination
+
+```tsx
+function loadPage(page) {
+  router.reload({
+    only: ['posts'],
+    data: { page },
+  })
+}
+```
+
+### Filter Changes
+
+```tsx
+function applyFilter(filter) {
+  router.reload({
+    only: ['items'],
+    data: { filter },
+  })
+}
+```
+
+## Performance Benefits
+
+1. **Less computation**: Only requested props are evaluated
+2. **Smaller responses**: Less data transferred
+3. **Faster updates**: UI responds immediately
+
+With `Lazy` props, the database isn't even queried unless the prop is needed.
+
+## Next Steps
+
+- [Props Overview](/props/overview/) - How props work with partial reloads
+- [Render Options](/advanced/render-options/) - Prop merging and prepending

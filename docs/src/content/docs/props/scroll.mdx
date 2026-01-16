@@ -1,0 +1,200 @@
+---
+title: Scroll Props
+description: Infinite scrolling and pagination with automatic data merging.
+---
+
+Scroll props are designed for infinite scrolling and pagination. They automatically merge new data with existing data as the user scrolls, instead of replacing it.
+
+## Basic Usage
+
+```go
+page := getPageParam(r)
+
+i.Render(w, r, "Feed", inertia.Props{
+    "posts": inertia.Scroll(func(ctx context.Context) ([]Post, error) {
+        return db.GetPosts(page, 20)  // Returns []Post
+    }, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+        PageName:    "page",
+        CurrentPage: page,
+        NextPage:    page + 1,
+    })),
+})
+```
+
+Key differences from regular props:
+
+1. The resolver returns a typed slice (`[]Post`)
+2. The data is automatically wrapped in a `data` key
+3. Metadata tells the frontend how to load more
+4. On subsequent loads, data is merged, not replaced
+
+## The Response
+
+A Scroll prop produces this structure:
+
+```json
+{
+  "posts": {
+    "data": [...]
+  },
+  "scrollProps": {
+    "posts": {
+      "pageName": "page",
+      "currentPage": 1,
+      "nextPage": 2,
+      "previousPage": null
+    }
+  },
+  "mergeProps": ["posts.data"]
+}
+```
+
+The `mergeProps` array tells Inertia to append new items to `posts.data` instead of replacing.
+
+## Scroll Metadata
+
+The `ScrollMetadata` struct provides pagination info:
+
+```go
+type ScrollMetadata struct {
+    PageName     string // Query param name (default: "page")
+    PreviousPage any    // Previous page (nil if none)
+    NextPage     any    // Next page (nil if none)
+    CurrentPage  any    // Current page number
+}
+```
+
+Use it to tell the frontend where to fetch more:
+
+```go
+inertia.WithScrollMetadata(inertia.ScrollMetadata{
+    PageName:     "page",
+    CurrentPage:  page,
+    NextPage:     calculateNextPage(page, total),
+    PreviousPage: calculatePrevPage(page),
+})
+```
+
+## Custom Data Wrapper
+
+By default, data is wrapped in a `data` key. Customize this:
+
+```go
+inertia.Scroll(resolver, 
+    inertia.WithWrapper("items"),  // Wrap in "items" instead
+)
+
+// Produces: { "posts": { "items": [...] } }
+```
+
+## Frontend Integration
+
+Use Inertia's `WhenVisible` component for automatic loading:
+
+### React
+
+```tsx
+import { WhenVisible, usePage, router } from '@inertiajs/react'
+
+export default function Feed({ posts }) {
+  const { scrollProps } = usePage().props
+  const postsMeta = scrollProps.posts
+  
+  function loadMore() {
+    if (postsMeta.nextPage) {
+      router.reload({
+        data: { [postsMeta.pageName]: postsMeta.nextPage },
+        only: ['posts'],
+      })
+    }
+  }
+  
+  return (
+    <div>
+      {posts.data.map(post => (
+        <PostCard key={post.id} post={post} />
+      ))}
+      
+      {postsMeta.nextPage && (
+        <WhenVisible once do={loadMore}>
+          <LoadingSpinner />
+        </WhenVisible>
+      )}
+    </div>
+  )
+}
+```
+
+When the loading spinner becomes visible, `loadMore` triggers a partial reload. The new posts are merged with existing ones automatically.
+
+## Prepending Data
+
+For feeds where new content should appear at the top:
+
+```go
+i.Render(w, r, "Notifications", inertia.Props{
+    "notifications": inertia.Scroll(resolver, 
+        inertia.WithScrollMetadata(meta),
+    ),
+}, inertia.WithPrependProps("notifications.data"))
+```
+
+Or the frontend can request prepend behavior:
+
+```tsx
+router.reload({
+  headers: { 'X-Inertia-Infinite-Scroll-Merge-Intent': 'prepend' }
+})
+```
+
+## Resetting on Navigation
+
+When navigating between different filtered views, you might want to reset instead of merge. The frontend sends `X-Inertia-Reset` to indicate this:
+
+```tsx
+// Navigating to a new category - reset the list
+router.visit(`/posts?category=${newCategory}`, {
+  headers: { 'X-Inertia-Reset': 'posts' }
+})
+```
+
+The server will set `reset: true` in the scroll metadata, and the frontend will replace instead of merge.
+
+## Complete Example
+
+```go
+func PostsHandler(w http.ResponseWriter, r *http.Request) {
+    page := 1
+    if p := r.URL.Query().Get("page"); p != "" {
+        page, _ = strconv.Atoi(p)
+    }
+    
+    posts, totalPages := db.GetPostsPaginated(page, 20)
+    
+    var nextPage any
+    if page < totalPages {
+        nextPage = page + 1
+    }
+    
+    var prevPage any
+    if page > 1 {
+        prevPage = page - 1
+    }
+    
+    i.Render(w, r, "Posts", inertia.Props{
+        "posts": inertia.Scroll(func(ctx context.Context) ([]Post, error) {
+            return posts, nil
+        }, inertia.WithScrollMetadata(inertia.ScrollMetadata{
+            PageName:     "page",
+            CurrentPage:  page,
+            NextPage:     nextPage,
+            PreviousPage: prevPage,
+        })),
+    })
+}
+```
+
+## Next Steps
+
+- [Partial Reloads](/advanced/partial-reloads/) - How Scroll uses partial reloads
+- [Render Options](/advanced/render-options/) - More on merge and prepend

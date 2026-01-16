@@ -1,0 +1,113 @@
+---
+title: Always Props
+description: Props that are always included, even on partial reloads.
+---
+
+Always props are included in every response, regardless of what the frontend requests. They're useful for data that must always be fresh.
+
+## Basic Usage
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user":          inertia.Value(user),
+    "notifications": inertia.Always(unreadCount),  // Always included
+})
+```
+
+Even if the frontend makes a partial reload requesting only specific props:
+
+```tsx
+router.reload({ only: ['posts'] })
+```
+
+The `notifications` prop will still be included in the response.
+
+## When to Use Always
+
+Use Always for data that:
+
+- **Changes frequently** - Notification counts, online status
+- **Affects the entire UI** - Auth state, permissions
+- **Must be consistent** - Data that other props depend on
+
+```go
+// Good uses of Always
+"unreadMessages": inertia.Always(messageCount),
+"isOnline":       inertia.Always(checkOnlineStatus()),
+"permissions":    inertia.Always(userPermissions),
+```
+
+## Always vs Other Props
+
+On a partial reload that requests `only: ['posts']`:
+
+| Prop Type | Included? |
+|-----------|-----------|
+| Value/Lazy | Only if requested |
+| Always | Yes, always |
+| Optional | Only if requested |
+| Deferred | No (deferred still) |
+
+```go
+i.Render(w, r, "Page", inertia.Props{
+    "posts":         inertia.Lazy(fetchPosts),     // Included (requested)
+    "comments":      inertia.Lazy(fetchComments),  // NOT included
+    "notifications": inertia.Always(count),         // Included (always)
+})
+```
+
+## Static vs Dynamic Always
+
+You can pass any value to Always:
+
+```go
+// Static value
+"version": inertia.Always("1.2.3"),
+
+// Computed at render time
+"notifications": inertia.Always(db.GetUnreadCount(userID)),
+```
+
+Note that unlike `Lazy`, the value passed to `Always` is evaluated when you call `Always()`, not when the response is rendered. For dynamic computation, you might combine patterns:
+
+```go
+// Computed each time the handler runs
+count := db.GetUnreadCount(userID)
+"notifications": inertia.Always(count),
+```
+
+## Common Pattern: Auth Data
+
+A common pattern is always including auth-related data:
+
+```go
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+    user := getAuthUser(r)
+    
+    i.Render(w, r, "Page", inertia.Props{
+        "auth": inertia.Always(map[string]any{
+            "user": user,
+            "permissions": getPermissions(user.ID),
+        }),
+        // ... other props
+    })
+}
+```
+
+This ensures the frontend always has current auth state, even on partial reloads.
+
+## Shared + Always
+
+For truly global data, combine with shared props:
+
+```go
+// In middleware or before handler
+inertia.Share(r, "flash", inertia.Always(getFlashMessages(r)))
+
+// Now every page has fresh flash messages
+```
+
+## Next Steps
+
+- [Once Props](/props/once/) - Load expensive data once
+- [Scroll Props](/props/scroll/) - Infinite scrolling

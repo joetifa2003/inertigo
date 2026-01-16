@@ -1,0 +1,174 @@
+---
+title: Vite Bundler
+description: Integrating Vite with inertigo.
+---
+
+The Vite bundler handles asset loading in both development and production. It provides template functions, dev server integration, and production asset serving.
+
+## Setup
+
+```go
+import "github.com/joetifa2003/inertigo/vite"
+
+bundler, err := vite.New(
+    os.DirFS("dist"),  // Production assets location
+    vite.WithDevMode(isDev),
+    vite.WithReactRefresh(),
+)
+```
+
+## Options
+
+### WithDevMode
+
+Enable development mode:
+
+```go
+vite.WithDevMode(true)
+```
+
+In dev mode:
+- Assets are loaded from the Vite dev server
+- Hot Module Replacement (HMR) is enabled
+- SSR uses Vite's dev SSR endpoint
+
+### WithURL
+
+Set a custom Vite dev server URL:
+
+```go
+vite.WithURL("http://localhost:3000")
+```
+
+Default: `http://localhost:5173`
+
+### WithReactRefresh
+
+Enable React Fast Refresh support:
+
+```go
+vite.WithReactRefresh()
+```
+
+Adds the necessary preamble script for React's hot reloading.
+
+### WithAssetPrefix
+
+Set the URL prefix for production assets:
+
+```go
+vite.WithAssetPrefix("/assets/")
+```
+
+Default: `/static/`
+
+## Template Functions
+
+The bundler provides a `vite` template function:
+
+```html
+<head>
+    {{ vite "src/main.tsx" }}
+</head>
+```
+
+### Development Output
+
+```html
+<script type="module" src="http://localhost:5173/@vite/client"></script>
+<script type="module">
+import RefreshRuntime from 'http://localhost:5173/@react-refresh'
+RefreshRuntime.injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {}
+window.$RefreshSig$ = () => (type) => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>
+<script type="module" src="http://localhost:5173/src/main.tsx"></script>
+```
+
+### Production Output
+
+```html
+<link rel="stylesheet" href="/static/assets/main-abc123.css">
+<link rel="modulepreload" href="/static/assets/vendor-def456.js">
+<script type="module" src="/static/assets/main-789xyz.js"></script>
+```
+
+## Serving Production Assets
+
+Use the bundler's handler to serve production assets:
+
+```go
+mux.Handle(bundler.AssetPrefix(), bundler.Handler())
+```
+
+This serves files from the `distFS` you provided to `New`.
+
+## Complete Example
+
+```go
+func main() {
+    isDev := os.Getenv("APP_ENV") != "production"
+    
+    bundler, _ := vite.New(
+        os.DirFS("assets/dist"),
+        vite.WithDevMode(isDev),
+        vite.WithReactRefresh(),
+        vite.WithAssetPrefix("/static/"),
+    )
+
+    i, _ := inertia.New(
+        bundler,
+        inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+        inertia.WithVersionFromFileFS(os.DirFS("assets/dist"), ".vite/manifest.json"),
+    )
+
+    mux := http.NewServeMux()
+    
+    // Serve production assets
+    mux.Handle(bundler.AssetPrefix(), bundler.Handler())
+    
+    // Your routes...
+    mux.HandleFunc("/", handleIndex)
+    
+    http.ListenAndServe(":8080", i.Middleware(mux))
+}
+```
+
+## Vite Configuration
+
+Your vite.config.ts should output a manifest:
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    manifest: true,  // Required
+    outDir: 'dist',
+    rollupOptions: {
+      input: 'src/main.tsx',
+    },
+  },
+})
+```
+
+The bundler reads `.vite/manifest.json` to resolve hashed filenames.
+
+## Dev SSR
+
+In development, the Vite bundler automatically provides SSR:
+
+```go
+// When bundler.IsDev() is true and SSR is enabled,
+// Inertia uses bundler.DevSSREngine() instead of your factory
+```
+
+This calls Vite's `/render` endpoint. Configure your Vite server to handle SSR requests.
+
+## Next Steps
+
+- [QuickJS SSR Engine](/bundlers/quickjs-ssr/) - Production SSR
+- [SSR](/advanced/server-side-rendering/) - SSR concepts

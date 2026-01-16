@@ -1,0 +1,133 @@
+---
+title: The Inertia Instance
+description: Creating and configuring your Inertia instance.
+---
+
+The `Inertia` instance is the central object that handles rendering pages, managing sessions, and coordinating with your bundler and SSR engine.
+
+## Creating an Instance
+
+```go
+import (
+    inertia "github.com/joetifa2003/inertigo"
+    "github.com/joetifa2003/inertigo/vite"
+)
+
+bundler, _ := vite.New(os.DirFS("dist"))
+
+i, err := inertia.New(bundler)
+```
+
+The first argument is always a `Bundler` - typically the Vite bundler. Additional options are passed as functional options.
+
+## Configuration Options
+
+### Root HTML Template
+
+Every Inertia response needs an HTML shell. You have two options:
+
+```go
+// From file path
+inertia.WithRootHtmlPath("templates/index.html")
+
+// From embedded filesystem
+//go:embed templates/index.html
+var templates embed.FS
+inertia.WithRooHtmlPathFS(templates, "templates/index.html")
+```
+
+### Server-Side Rendering
+
+Enable SSR with a factory function that creates your SSR engine:
+
+```go
+inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+    return qjs.New(
+        qjs.WithSrcPath("dist/server/ssr.js"),
+        qjs.WithClusterSize(16),
+    )
+})
+```
+
+The factory is called lazily on the first request. This lets your app start quickly even if the SSR bundle takes time to compile.
+
+### Asset Versioning
+
+Force a full page reload when your JS/CSS changes:
+
+```go
+// Static version string
+inertia.WithVersion("1.0.0")
+
+// Computed from file hash (recommended)
+inertia.WithVersionFromFile("dist/manifest.json")
+
+// From embedded filesystem
+inertia.WithVersionFromFileFS(distFS, ".vite/manifest.json")
+```
+
+### Session Management
+
+By default, inertigo uses an in-memory session store. For production, provide your own:
+
+```go
+inertia.WithSession(mySessionStore)
+```
+
+Your session store must implement the `Session` interface:
+
+```go
+type Session interface {
+    Flash(w http.ResponseWriter, r *http.Request, values map[string]any) error
+    Get(w http.ResponseWriter, r *http.Request) (map[string]any, error)
+}
+```
+
+### CSRF Protection
+
+Enable built-in CSRF protection:
+
+```go
+// Development (non-secure cookies)
+inertia.WithCSRF(true, false)
+
+// Production (secure cookies, requires HTTPS)
+inertia.WithCSRF(true, true)
+```
+
+### Logging
+
+Pass a logger for debugging:
+
+```go
+inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+```
+
+The logger must implement the `Logger` interface (compatible with `slog`).
+
+## Complete Example
+
+```go
+bundler, _ := vite.New(
+    os.DirFS("dist"),
+    vite.WithDevMode(isDev),
+    vite.WithReactRefresh(),
+)
+
+i, err := inertia.New(
+    bundler,
+    inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+    inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+        return qjs.New(qjs.WithSrcPath("dist/server/ssr.js"))
+    }),
+    inertia.WithVersionFromFile("dist/.vite/manifest.json"),
+    inertia.WithSession(myRedisSession),
+    inertia.WithCSRF(true, !isDev),
+    inertia.WithLogger(slog.Default()),
+)
+```
+
+## Next Steps
+
+- [Rendering Pages](/core-concepts/rendering-pages/) - How to render Inertia responses
+- [Middleware](/core-concepts/middleware/) - What the middleware does

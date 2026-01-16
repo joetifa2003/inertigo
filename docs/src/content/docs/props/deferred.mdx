@@ -1,0 +1,162 @@
+---
+title: Deferred Props
+description: Load non-critical data after the initial page render.
+---
+
+Deferred props let you load heavy data after the page has already rendered. This improves perceived performance by showing the page instantly and filling in the details later.
+
+## Basic Usage
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user": inertia.Value(user),  // Loads immediately
+    
+    "heavyReport": inertia.Deferred(func(ctx context.Context) (any, error) {
+        return db.GenerateExpensiveReport()  // Loads after render
+    }),
+})
+```
+
+On initial load:
+
+1. The page renders with `user` data
+2. `heavyReport` shows a loading state on the frontend
+3. Inertia automatically makes a partial reload request for `heavyReport`
+4. The data arrives and the component updates
+
+## Frontend Integration
+
+Use the `<Deferred>` component to handle loading states:
+
+### React
+
+```tsx
+import { Deferred } from '@inertiajs/react'
+
+export default function Dashboard({ user, heavyReport }) {
+  return (
+    <div>
+      <h1>Welcome, {user.name}</h1>
+      
+      <Deferred data="heavyReport">
+        <template slot="fallback">
+          <div>Loading report...</div>
+        </template>
+        
+        <ReportTable data={heavyReport} />
+      </Deferred>
+    </div>
+  )
+}
+```
+
+### Vue
+
+```vue
+<script setup>
+import { Deferred } from '@inertiajs/vue3'
+</script>
+
+<template>
+  <div>
+    <h1>Welcome, {{ user.name }}</h1>
+    
+    <Deferred data="heavyReport">
+      <template #fallback>
+        <div>Loading report...</div>
+      </template>
+      
+      <ReportTable :data="heavyReport" />
+    </Deferred>
+  </div>
+</template>
+```
+
+## Grouped Deferred Props
+
+Sometimes you want multiple deferred props to load together. Use `DeferredGroup`:
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user": inertia.Value(user),
+    
+    // These load together in one request
+    "metrics": inertia.DeferredGroup("stats", func(ctx context.Context) (any, error) {
+        return db.GetMetrics()
+    }),
+    "trends": inertia.DeferredGroup("stats", func(ctx context.Context) (any, error) {
+        return db.GetTrends()
+    }),
+    
+    // This loads separately
+    "logs": inertia.Deferred(func(ctx context.Context) (any, error) {
+        return db.GetRecentLogs()
+    }),
+})
+```
+
+Inertia makes:
+- One request for `metrics` and `trends` (the "stats" group)
+- Another request for `logs` (the "default" group)
+
+### Frontend with Multiple Props
+
+```tsx
+<Deferred data={['metrics', 'trends']}>
+  <template slot="fallback">
+    <div>Loading statistics...</div>
+  </template>
+  
+  <StatsPanel metrics={metrics} trends={trends} />
+</Deferred>
+```
+
+The content only renders when both props are available.
+
+## When to Use Deferred
+
+Use deferred props when:
+
+- **The data is slow to compute** - Reports, analytics, aggregations
+- **The page is usable without it** - Main content loads instantly
+- **User perception matters** - Showing something is better than waiting
+
+Good candidates for deferred:
+
+```go
+"analytics":   inertia.Deferred(fetchAnalytics),    // Slow queries
+"suggestions": inertia.Deferred(generateSuggestions), // ML/AI calls
+"activity":    inertia.Deferred(fetchActivityLog),  // Large datasets
+```
+
+## Deferred vs Optional
+
+| Deferred | Optional |
+|----------|----------|
+| Auto-fetched after render | Never fetched unless requested |
+| Always eventually loads | Only loads if frontend needs it |
+| Use for slow but needed data | Use for rarely-needed data |
+
+## How It Works
+
+1. On initial render, deferred props are excluded from the response
+2. The response includes a `deferredProps` field listing what's deferred:
+
+```json
+{
+  "component": "Dashboard",
+  "props": { "user": {...} },
+  "deferredProps": {
+    "default": ["logs"],
+    "stats": ["metrics", "trends"]
+  }
+}
+```
+
+3. Inertia automatically makes partial reload requests to fetch each group
+4. Props are merged into the page as they arrive
+
+## Next Steps
+
+- [Optional Props](/props/optional/) - On-demand prop loading
+- [Once Props](/props/once/) - Load expensive data once

@@ -1,0 +1,133 @@
+---
+title: Optional Props
+description: Props that are only included when explicitly requested.
+---
+
+Optional props are excluded from the response by default. They're only included when the frontend explicitly requests them via a partial reload.
+
+## Basic Usage
+
+```go
+i.Render(w, r, "users/Show", inertia.Props{
+    "user": inertia.Value(user),  // Always included
+    
+    "activityLog": inertia.Optional(func(ctx context.Context) (any, error) {
+        return db.GetUserActivity(user.ID)  // Only when requested
+    }),
+})
+```
+
+On initial load, only `user` is sent. The `activityLog` won't be computed or sent until the frontend asks for it.
+
+## Fetching Optional Props
+
+The frontend requests optional props using `router.reload`:
+
+```tsx
+// React
+import { router } from '@inertiajs/react'
+
+function UserProfile({ user }) {
+  const [showActivity, setShowActivity] = useState(false)
+  
+  function loadActivity() {
+    router.reload({ only: ['activityLog'] })
+    setShowActivity(true)
+  }
+  
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <button onClick={loadActivity}>Show Activity</button>
+      
+      {showActivity && <ActivityLog data={activityLog} />}
+    </div>
+  )
+}
+```
+
+When the user clicks the button:
+1. Inertia makes a partial reload request for `activityLog`
+2. The server runs the Optional resolver function
+3. The data is returned and merged into the page props
+4. Your component re-renders with `activityLog` available
+
+## When to Use Optional
+
+Use optional props for:
+
+- **Large datasets that aren't always needed** - Activity logs, full history
+- **Expensive computations** - Data the user might not view
+- **Progressive disclosure** - Hidden panels, "show more" sections
+
+```go
+"comments":   inertia.Optional(fetchAllComments),    // Large
+"rawData":    inertia.Optional(fetchExportData),     // Expensive
+"advancedSettings": inertia.Optional(fetchSettings), // Rarely viewed
+```
+
+## Optional vs Lazy
+
+| Optional | Lazy |
+|----------|------|
+| Excluded on full page load | Included on full page load |
+| Must be explicitly requested | Automatically included |
+| For rarely-needed data | For always-needed computed data |
+
+```go
+// Lazy: always computed on full load
+"user": inertia.Lazy(fetchUser),
+
+// Optional: never computed unless requested
+"exportData": inertia.Optional(fetchExportData),
+```
+
+## Optional vs Deferred
+
+| Optional | Deferred |
+|----------|----------|
+| Never auto-fetched | Auto-fetched after render |
+| User/code must request it | Inertia requests automatically |
+| For on-demand data | For slow but always-needed data |
+
+```go
+// Deferred: always loads, just after initial render
+"analytics": inertia.Deferred(slowAnalytics),
+
+// Optional: only loads if user requests it
+"exportHistory": inertia.Optional(fetchHistory),
+```
+
+## Combining with Other Patterns
+
+You can use Optional with modals and UI state:
+
+```tsx
+function UsersPage({ users }) {
+  const [selectedUser, setSelectedUser] = useState(null)
+  
+  function showUserDetails(user) {
+    setSelectedUser(user)
+    router.reload({ only: ['userDetails'] })
+  }
+  
+  return (
+    <>
+      <UserList users={users} onSelect={showUserDetails} />
+      
+      {selectedUser && (
+        <Modal>
+          <UserDetails user={selectedUser} details={userDetails} />
+        </Modal>
+      )}
+    </>
+  )
+}
+```
+
+The modal opens immediately with basic data, while full details load in the background.
+
+## Next Steps
+
+- [Always Props](/props/always/) - Force inclusion on partial reloads
+- [Once Props](/props/once/) - Load expensive data once

@@ -1,0 +1,109 @@
+---
+title: Why inertigo?
+description: What inertigo brings to Go web development.
+---
+
+If you're building web applications with Go and want modern, reactive frontends without the complexity of a separate API layer, inertigo is designed for you.
+
+## The Go Advantage
+
+Go is fantastic for web development. Fast compilation, simple deployment (just copy the binary), excellent standard library, and strong typing. But when it comes to frontends, most Go developers face a choice:
+
+1. **Server-rendered templates** - Works great with `html/template`, but lacks the interactivity of modern UIs
+2. **Separate SPA + API** - Great UX, but now you're maintaining two codebases and dealing with all the API complexity
+
+inertigo gives you a third option: server-driven single-page apps.
+
+## Works With Any Router
+
+inertigo is just middleware. It works with the standard library's `http.ServeMux`, and any router that supports `http.Handler`:
+
+```go
+// Standard library
+mux := http.NewServeMux()
+http.ListenAndServe(":8080", i.Middleware(mux))
+
+// Chi
+r := chi.NewRouter()
+r.Use(i.Middleware)
+
+// Gorilla Mux
+r := mux.NewRouter()
+http.ListenAndServe(":8080", i.Middleware(r))
+```
+
+No framework lock-in. If it's an `http.Handler`, it works.
+
+## Type-Safe Props
+
+In Go, your data structures are strongly typed. inertigo lets you pass them directly to your frontend:
+
+```go
+type User struct {
+    ID    int    `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+func ShowUser(w http.ResponseWriter, r *http.Request) {
+    user := User{ID: 1, Name: "Joe", Email: "joe@example.com"}
+    
+    i.Render(w, r, "users/Show", inertia.Props{
+        "user": inertia.Value(user),
+    })
+}
+```
+
+Your Go struct becomes the TypeScript interface your React component expects. One source of truth.
+
+## Built-in SSR with QuickJS
+
+Server-side rendering usually means running Node.js alongside your Go server. inertigo takes a different approach: it embeds QuickJS, a lightweight JavaScript engine, directly in your Go binary.
+
+```go
+i, _ := inertia.New(
+    bundler,
+    inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+        return qjs.New(
+            qjs.WithSrcPath("dist/server/ssr.js"),
+            qjs.WithClusterSize(16), // Pool of JS runtimes
+        )
+    }),
+)
+```
+
+Your pages render on the server for fast initial loads and SEO, but you deploy just a single binary.
+
+## Everything Inertia Offers
+
+inertigo implements the full Inertia protocol:
+
+- **Partial reloads** - Fetch only the props you need
+- **Deferred props** - Load heavy data after the initial render
+- **Shared data** - Global props available on every page
+- **Flash messages** - Session-based messages that clear after being shown
+- **Validation errors** - Seamless form error handling
+- **Precognition** - Real-time validation before form submission
+- **Asset versioning** - Force full reloads when your JS/CSS changes
+- **CSRF protection** - Built-in cross-site request forgery protection
+- **History encryption** - Protect sensitive data in browser history
+
+All the features you'd expect from the Laravel or Rails adapters, but for Go.
+
+## Vite Integration
+
+Modern frontend tooling just works:
+
+```go
+bundler, _ := vite.New(
+    os.DirFS("dist"),
+    vite.WithDevMode(isDev),
+    vite.WithReactRefresh(),
+)
+```
+
+In development, inertigo proxies to the Vite dev server for hot module replacement. In production, it serves your built assets with proper caching.
+
+## Getting Started
+
+Ready to try it? Head over to the [installation guide](/getting-started/installation/) to get started.

@@ -1,0 +1,166 @@
+---
+title: Render Options
+description: Controlling page behavior with render options.
+---
+
+Render options let you control how a page behaves in the browser. You can encrypt history, merge props, and more.
+
+## Using Render Options
+
+Pass options as additional arguments to `Render`:
+
+```go
+i.Render(w, r, "Dashboard", props,
+    inertia.WithEncryptHistory(true),
+    inertia.WithMergeProps("notifications"),
+)
+```
+
+## Available Options
+
+### WithEncryptHistory
+
+Encrypt the page's data in browser history:
+
+```go
+inertia.WithEncryptHistory(true)
+```
+
+Protects sensitive data from being visible if the user presses back after logging out.
+
+### WithClearHistory
+
+Clear previously encrypted history:
+
+```go
+inertia.WithClearHistory(true)
+```
+
+Use this on logout or when the user should lose access to previous page data.
+
+### WithMergeProps
+
+Append new data to existing arrays instead of replacing:
+
+```go
+inertia.WithMergeProps("comments", "notifications")
+```
+
+When the user navigates back to this page, new items are added to these arrays.
+
+### WithPrependProps
+
+Prepend new data to existing arrays:
+
+```go
+inertia.WithPrependProps("newMessages")
+```
+
+New items appear at the beginning of the array.
+
+### WithDeepMergeProps
+
+Deep merge objects instead of replacing:
+
+```go
+inertia.WithDeepMergeProps("settings")
+```
+
+Useful for nested configuration objects where you want to update specific keys.
+
+### WithMatchPropsOn
+
+Specify keys used for matching when merging array items:
+
+```go
+inertia.WithMatchPropsOn("id")
+```
+
+When merging, items are matched by their `id` field to avoid duplicates.
+
+## History Encryption
+
+Browser history stores page data. Without encryption, sensitive data remains accessible:
+
+1. User views `/account` (shows SSN, bank info)
+2. User logs out
+3. User presses back button
+4. Sensitive data is visible from history state
+
+With encryption:
+
+```go
+// On sensitive pages
+i.Render(w, r, "Account", props, 
+    inertia.WithEncryptHistory(true),
+)
+
+// On logout
+i.Render(w, r, "Login", nil,
+    inertia.WithClearHistory(true),
+)
+```
+
+After logout, pressing back shows a loading state and triggers a fresh server request.
+
+## Merge and Prepend
+
+Default behavior replaces props on navigation:
+
+```go
+// First load: comments = [1, 2, 3]
+// Second load: comments = [4, 5, 6]
+// Result: comments = [4, 5, 6]
+```
+
+With merge:
+
+```go
+i.Render(w, r, "Post", props, inertia.WithMergeProps("comments"))
+
+// First load: comments = [1, 2, 3]
+// Second load: comments = [4, 5, 6]  
+// Result: comments = [1, 2, 3, 4, 5, 6]
+```
+
+With prepend:
+
+```go
+i.Render(w, r, "Feed", props, inertia.WithPrependProps("posts"))
+
+// Result: posts = [4, 5, 6, 1, 2, 3]
+```
+
+## Combining Options
+
+```go
+i.Render(w, r, "SecureFeed", props,
+    inertia.WithEncryptHistory(true),
+    inertia.WithMergeProps("posts"),
+    inertia.WithMatchPropsOn("id"),
+)
+```
+
+## Page Object Format
+
+Options are serialized in the page object:
+
+```json
+{
+  "component": "Feed",
+  "props": {...},
+  "encryptHistory": true,
+  "clearHistory": false,
+  "mergeProps": ["posts"],
+  "prependProps": [],
+  "deepMergeProps": [],
+  "matchPropsOn": ["id"]
+}
+```
+
+The Inertia client reads these and applies the appropriate behavior.
+
+## Next Steps
+
+- [Scroll Props](/props/scroll/) - Automatic merging for infinite scroll
+- [SSR](/advanced/server-side-rendering/) - Server-side rendering

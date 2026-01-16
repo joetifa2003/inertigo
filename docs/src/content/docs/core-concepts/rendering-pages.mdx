@@ -1,0 +1,143 @@
+---
+title: Rendering Pages
+description: How to render Inertia pages from your handlers.
+---
+
+The `Render` function is how you send pages to the frontend. It's the equivalent of rendering a template in a traditional server-side app.
+
+## Basic Usage
+
+```go
+func ShowUser(w http.ResponseWriter, r *http.Request) {
+    user := getUserFromDB(r.PathValue("id"))
+    
+    err := i.Render(w, r, "users/Show", inertia.Props{
+        "user": inertia.Value(user),
+    })
+    if err != nil {
+        http.Error(w, "Internal error", 500)
+    }
+}
+```
+
+The arguments are:
+
+1. `w` - The response writer
+2. `r` - The request
+3. Component name - Maps to your frontend component (e.g., `users/Show` -> `src/pages/users/Show.tsx`)
+4. Props - Data to pass to the component
+
+## The Component Name
+
+The component name is a string that your frontend uses to resolve the actual component file. The convention is to match your page directory structure:
+
+| Component Name | React Path |
+|---------------|------------|
+| `index` | `src/pages/index.tsx` |
+| `users/Index` | `src/pages/users/Index.tsx` |
+| `users/Show` | `src/pages/users/Show.tsx` |
+
+This is configured in your frontend's `createInertiaApp`:
+
+```tsx
+createInertiaApp({
+  resolve: name => {
+    const pages = import.meta.glob('./pages/**/*.tsx', { eager: true })
+    return pages[`./pages/${name}.tsx`]
+  },
+  // ...
+})
+```
+
+## Props
+
+Props is a map of string keys to `Prop` values. The simplest prop is `Value`:
+
+```go
+inertia.Props{
+    "user":  inertia.Value(user),
+    "posts": inertia.Value(posts),
+    "count": inertia.Value(42),
+}
+```
+
+See the [Props documentation](/props/overview/) for all prop types including Lazy, Deferred, Optional, and more.
+
+## Render Options
+
+You can pass options to control page behavior:
+
+```go
+i.Render(w, r, "Dashboard", props,
+    inertia.WithEncryptHistory(true),
+    inertia.WithClearHistory(true),
+    inertia.WithMergeProps("notifications"),
+)
+```
+
+### Available Options
+
+| Option | Description |
+|--------|-------------|
+| `WithEncryptHistory(bool)` | Encrypt this page's data in browser history |
+| `WithClearHistory(bool)` | Clear encrypted history state |
+| `WithMergeProps(...string)` | Props to append during navigation |
+| `WithPrependProps(...string)` | Props to prepend during navigation |
+| `WithDeepMergeProps(...string)` | Props to deep merge during navigation |
+| `WithMatchPropsOn(...string)` | Keys to match when merging arrays |
+
+## What Render Does
+
+Behind the scenes, `Render` does quite a bit:
+
+1. **Merges props** - Combines shared props, page props, and flash data
+2. **Processes prop types** - Resolves lazy props, filters deferred props, etc.
+3. **Checks if Inertia request** - Returns JSON for XHR, full HTML otherwise
+4. **Handles SSR** - Renders the component server-side if enabled
+5. **Executes the template** - Injects the rendered page into your HTML shell
+
+## First Visit vs. Subsequent Visits
+
+On the first visit, `Render` returns a full HTML page:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>...</head>
+<body>
+  <div id="app" data-page='{"component":"users/Show","props":{...}}'></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
+```
+
+On subsequent visits (XHR), it returns just JSON:
+
+```json
+{
+  "component": "users/Show",
+  "props": {"user": {...}},
+  "url": "/users/1",
+  "version": "abc123"
+}
+```
+
+Inertia handles the swap client-side.
+
+## Error Handling
+
+Always handle errors from `Render`:
+
+```go
+if err := i.Render(w, r, "Page", props); err != nil {
+    log.Printf("Render error: %v", err)
+    http.Error(w, "Something went wrong", http.StatusInternalServerError)
+}
+```
+
+Common errors include SSR failures or template execution errors.
+
+## Next Steps
+
+- [Props Overview](/props/overview/) - Learn about prop types
+- [Middleware](/core-concepts/middleware/) - What the middleware does

@@ -1,0 +1,108 @@
+---
+title: Middleware
+description: What the Inertia middleware does and how to use it.
+---
+
+The Inertia middleware is required for inertigo to function properly. It handles several concerns that need to happen before your handlers run.
+
+## Using the Middleware
+
+Wrap your router with the middleware:
+
+```go
+mux := http.NewServeMux()
+// ... register routes ...
+
+http.ListenAndServe(":8080", i.Middleware(mux))
+```
+
+Or with a router that supports middleware:
+
+```go
+// Chi
+r := chi.NewRouter()
+r.Use(i.Middleware)
+
+// Echo
+e.Use(echo.WrapMiddleware(i.Middleware))
+```
+
+## What It Does
+
+### 1. Request Context
+
+The middleware injects an internal context into each request that tracks:
+
+- **Shared props** - Props you add via `Share()` that should appear on every page
+- **Flash data** - Data from the previous request's session
+
+This context is pooled and reused for performance.
+
+### 2. Flash Data Loading
+
+At the start of each request, flash data from the session is loaded into the request context. This data was stored by `Flash()` calls in a previous request.
+
+```go
+// Previous request
+i.Flash(w, r, "success", "Item created!")
+i.Redirect(w, r, "/items")
+
+// This request - flash data is automatically available
+```
+
+### 3. CSRF Protection
+
+If CSRF is enabled, the middleware:
+
+- Sets a new CSRF token cookie if one doesn't exist
+- Validates the `X-XSRF-TOKEN` header on state-changing requests (POST, PUT, PATCH, DELETE)
+- Returns 403 Forbidden if validation fails
+
+```go
+i, _ := inertia.New(bundler, inertia.WithCSRF(true, false))
+```
+
+### 4. Asset Version Checking
+
+When asset versioning is configured, the middleware compares the client's version (from the `X-Inertia-Version` header) with the server's version.
+
+If they differ on a GET request, it responds with:
+
+```
+HTTP/1.1 409 Conflict
+X-Inertia-Location: /current-url
+```
+
+This tells the Inertia client to do a full page reload to get the new assets.
+
+## Order Matters
+
+The Inertia middleware should typically be one of the outermost layers so it can:
+
+1. Set up the request context before your handlers run
+2. Handle CSRF before any state changes
+3. Check asset versions before rendering
+
+```go
+// Good: Inertia wraps everything
+handler := i.Middleware(yourRouter)
+
+// Also good: logging outside, Inertia inside
+handler := loggingMiddleware(i.Middleware(yourRouter))
+```
+
+## Without the Middleware
+
+If you forget the middleware, you'll see issues like:
+
+- `Share()` calls have no effect
+- Flash messages don't appear
+- CSRF validation doesn't happen
+- Asset version mismatches aren't detected
+
+Always wrap your final handler with `i.Middleware()`.
+
+## Next Steps
+
+- [Root Template](/core-concepts/root-template/) - Your HTML shell
+- [Shared Props](/data/shared-props/) - Sharing data across pages

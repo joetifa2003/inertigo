@@ -1,0 +1,120 @@
+---
+title: Once Props
+description: Props that are included once and remembered by the client.
+---
+
+Once props are included on the first visit but excluded on subsequent visits to the same page. The frontend remembers the value, so you save computation on return visits.
+
+## Basic Usage
+
+```go
+i.Render(w, r, "Dashboard", inertia.Props{
+    "user": inertia.Value(user),
+    
+    "permissions": inertia.Once(func(ctx context.Context) (any, error) {
+        return computePermissions(user.ID)  // Expensive, rarely changes
+    }),
+})
+```
+
+First visit: `permissions` is computed and sent.  
+Return visit: The prop is skipped; the frontend uses its cached value.
+
+## How It Works
+
+1. On first render, Once props are included in the response
+2. The response includes metadata in `onceProps`:
+
+```json
+{
+  "props": { "permissions": [...] },
+  "onceProps": {
+    "permissions": { "prop": "permissions" }
+  }
+}
+```
+
+3. The frontend stores this and sends `X-Inertia-Except-Once-Props` on subsequent requests
+4. The server skips computing those props
+
+## With Expiration
+
+Sometimes "once" should mean "once per hour" instead of "once forever." Use `OnceWithExpiration`:
+
+```go
+"systemConfig": inertia.OnceWithExpiration(
+    func(ctx context.Context) (any, error) {
+        return loadSystemConfig()
+    },
+    time.Hour,  // Re-fetch after 1 hour
+),
+```
+
+The expiration is sent to the frontend:
+
+```json
+{
+  "onceProps": {
+    "systemConfig": {
+      "prop": "systemConfig",
+      "expiresAt": "1704067200000"  // Unix timestamp in ms
+    }
+  }
+}
+```
+
+After expiration, the frontend will request the prop again.
+
+## When to Use Once
+
+Use Once for data that:
+
+- **Is expensive to compute** - Complex permission calculations, config loading
+- **Rarely changes** - System settings, role definitions
+- **Is the same across page visits** - User-specific but stable
+
+```go
+// Good uses of Once
+"roles":        inertia.Once(fetchAllRoles),           // Static reference data
+"permissions":  inertia.Once(computeUserPermissions),  // Expensive, stable
+"featureFlags": inertia.Once(loadFeatureFlags),        // Changes rarely
+```
+
+## Once vs Other Props
+
+| Prop Type | On First Visit | On Return Visit |
+|-----------|---------------|-----------------|
+| Value/Lazy | Included | Included |
+| Always | Included | Included |
+| Once | Included | Excluded (cached) |
+| Optional | Excluded | Excluded |
+| Deferred | Deferred | Deferred |
+
+## Force Refetch
+
+If you need to force a refetch of Once props (say, after the user's permissions change), the frontend can clear its cache:
+
+```tsx
+// React - clear cached once props and reload
+router.reload({ clearOnceProps: true })
+```
+
+Or you can use different component names, which resets the cache automatically.
+
+## Combining Once with Shared
+
+For app-wide "once" data, combine with shared props:
+
+```go
+// In middleware
+inertia.Share(r, "appConfig", inertia.Once(func(ctx context.Context) (any, error) {
+    return loadAppConfig()
+}))
+```
+
+Every page starts with the config, but it's only fetched once per session.
+
+## Next Steps
+
+- [Scroll Props](/props/scroll/) - Infinite scrolling support
+- [Shared Props](/data/shared-props/) - Global data sharing

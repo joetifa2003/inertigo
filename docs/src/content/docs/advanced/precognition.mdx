@@ -1,0 +1,201 @@
+---
+title: Precognition
+description: Real-time validation before form submission.
+---
+
+Precognition lets you validate form fields in real-time as the user types, without submitting the form. It provides instant feedback without duplicating validation logic on the client.
+
+## How It Works
+
+1. User types in a field
+2. Frontend sends a Precognition request with current field value
+3. Server validates just that field
+4. Server responds with success (204) or errors (422)
+5. Frontend shows validation feedback immediately
+
+The key: **your validation code runs on the server**, but feedback is instant.
+
+## Detecting Precognition Requests
+
+Use `IsPrecognition` to check if the current request is a Precognition validation:
+
+```go
+func CreateUser(w http.ResponseWriter, r *http.Request) {
+    var body struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    json.NewDecoder(r.Body).Decode(&body)
+    
+    errors := map[string]any{}
+    
+    // Only validate fields the client is asking about
+    if inertia.ShouldValidateField(r, "email") {
+        if body.Email == "" {
+            errors["email"] = "Email is required"
+        } else if !isValidEmail(body.Email) {
+            errors["email"] = "Invalid email format"
+        }
+    }
+    
+    if inertia.ShouldValidateField(r, "password") {
+        if len(body.Password) < 8 {
+            errors["password"] = "Password must be at least 8 characters"
+        }
+    }
+    
+    // RenderErrors handles both Precognition and regular requests
+    if err := i.RenderErrors(w, r, errors); err != nil {
+        log.Println(err)
+        return
+    }
+    
+    // For Precognition, we're done here
+    if inertia.IsPrecognition(r) {
+        return
+    }
+    
+    // Regular form submission continues...
+    if len(errors) > 0 {
+        return
+    }
+    
+    db.CreateUser(body.Email, body.Password)
+    i.Redirect(w, r, "/dashboard")
+}
+```
+
+## Precognition Helpers
+
+### IsPrecognition
+
+Check if this is a Precognition request:
+
+```go
+if inertia.IsPrecognition(r) {
+    // This is a validation-only request
+}
+```
+
+### ShouldValidateField
+
+Check if a specific field should be validated:
+
+```go
+if inertia.ShouldValidateField(r, "email") {
+    // Validate email field
+}
+```
+
+The frontend can request validation of specific fields. If no filter is specified, all fields should be validated.
+
+### PrecognitionFields
+
+Get the list of fields to validate:
+
+```go
+fields := inertia.PrecognitionFields(r)
+// fields might be: ["email", "password"] or nil (all fields)
+```
+
+### PrecognitionSuccess
+
+Send a success response (204 No Content):
+
+```go
+if len(errors) == 0 {
+    inertia.PrecognitionSuccess(w, r)
+    return
+}
+```
+
+### PrecognitionError
+
+Send an error response (422 Unprocessable Entity):
+
+```go
+inertia.PrecognitionError(w, r, errors)
+```
+
+## Using RenderErrors
+
+The easiest approach is using `RenderErrors`, which handles both cases:
+
+```go
+errors := validate(body)
+
+err := i.RenderErrors(w, r, errors)
+if err != nil {
+    log.Println(err)
+    return
+}
+
+if inertia.IsPrecognition(r) {
+    return  // Precognition response already sent
+}
+
+if len(errors) > 0 {
+    return  // Redirect already sent
+}
+
+// Continue with success logic...
+```
+
+## Frontend Integration
+
+Inertia's form helper supports Precognition:
+
+```tsx
+import { useForm } from '@inertiajs/react'
+
+function Register() {
+  const form = useForm({
+    email: '',
+    password: '',
+  })
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); form.post('/register') }}>
+      <input
+        type="email"
+        value={form.data.email}
+        onChange={e => form.setData('email', e.target.value)}
+        onBlur={() => form.validate('email')}  // Validate on blur
+      />
+      {form.errors.email && <span>{form.errors.email}</span>}
+      
+      <input
+        type="password"
+        value={form.data.password}
+        onChange={e => form.setData('password', e.target.value)}
+        onBlur={() => form.validate('password')}
+      />
+      {form.errors.password && <span>{form.errors.password}</span>}
+      
+      <button type="submit">Register</button>
+    </form>
+  )
+}
+```
+
+## Request Headers
+
+Precognition requests include these headers:
+
+| Header | Value |
+|--------|-------|
+| `Precognition` | `true` |
+| `Precognition-Validate-Only` | `email,password` (optional) |
+
+Response headers:
+
+| Header | Value |
+|--------|-------|
+| `Precognition` | `true` |
+| `Precognition-Success` | `true` (on 204) |
+| `Vary` | `Precognition` |
+
+## Next Steps
+
+- [Validation Errors](/data/validation-errors/) - Standard error handling
+- [Partial Reloads](/advanced/partial-reloads/) - Related data fetching

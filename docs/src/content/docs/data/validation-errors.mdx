@@ -1,0 +1,175 @@
+---
+title: Validation Errors
+description: Handling form validation errors with Inertia.
+---
+
+inertigo provides a streamlined way to handle validation errors that integrates perfectly with Inertia's form handling on the frontend.
+
+## Basic Usage
+
+The `RenderErrors` function handles the complete error flow:
+
+```go
+func CreateUser(w http.ResponseWriter, r *http.Request) {
+    var body struct {
+        Name     string `json:"name"`
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    json.NewDecoder(r.Body).Decode(&body)
+    
+    // Validate
+    errors := map[string]any{}
+    if body.Name == "" {
+        errors["name"] = "Name is required"
+    }
+    if body.Email == "" {
+        errors["email"] = "Email is required"
+    }
+    
+    // Handle errors - this redirects back if there are any
+    if err := i.RenderErrors(w, r, errors); err != nil {
+        log.Println(err)
+        return
+    }
+    if len(errors) > 0 {
+        return  // Response already sent
+    }
+    
+    // Success - create user and redirect
+    db.CreateUser(body)
+    i.Flash(w, r, "success", "User created!")
+    i.Redirect(w, r, "/users")
+}
+```
+
+## What RenderErrors Does
+
+When errors exist:
+
+1. Flashes the errors to the session
+2. Redirects back to the previous page
+3. The form re-renders with `errors` prop populated
+
+When no errors:
+
+1. Returns with no action (success case)
+
+## Error Format
+
+Errors should be a map of field names to error messages:
+
+```go
+errors := map[string]any{
+    "email": "Invalid email format",
+    "password": "Password must be at least 8 characters",
+}
+```
+
+You can also use arrays for multiple errors per field:
+
+```go
+errors := map[string]any{
+    "password": []string{
+        "Password must be at least 8 characters",
+        "Password must contain a number",
+    },
+}
+```
+
+## Error Bags
+
+For forms with multiple sections, use error bags to namespace errors:
+
+```go
+// Request includes X-Inertia-Error-Bag: shipping
+// Errors are namespaced automatically
+```
+
+The frontend can then access errors by bag:
+
+```tsx
+const { errors } = usePage().props
+errors.shipping?.address  // Errors from shipping bag
+errors.billing?.cardNumber  // Errors from billing bag
+```
+
+RenderErrors handles this automatically based on the `X-Inertia-Error-Bag` header.
+
+## Frontend Integration
+
+Inertia's `useForm` hook handles errors automatically:
+
+```tsx
+import { useForm } from '@inertiajs/react'
+
+function CreateUser() {
+  const { data, setData, post, processing, errors } = useForm({
+    name: '',
+    email: '',
+    password: '',
+  })
+
+  function submit(e) {
+    e.preventDefault()
+    post('/users')
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div>
+        <input
+          value={data.name}
+          onChange={e => setData('name', e.target.value)}
+        />
+        {errors.name && <span className="error">{errors.name}</span>}
+      </div>
+      
+      <div>
+        <input
+          type="email"
+          value={data.email}
+          onChange={e => setData('email', e.target.value)}
+        />
+        {errors.email && <span className="error">{errors.email}</span>}
+      </div>
+      
+      <button type="submit" disabled={processing}>
+        Create User
+      </button>
+    </form>
+  )
+}
+```
+
+## Errors Always Included
+
+Inertia ensures the `errors` prop is always present (empty object if no errors):
+
+```go
+// Even without explicit errors, this is always in the response:
+"props": {
+    "errors": {}
+}
+```
+
+This means your frontend can always safely access `errors` without null checks.
+
+## Manual Error Handling
+
+For more control, handle errors manually:
+
+```go
+if len(errors) > 0 {
+    i.Flash(w, r, "errors", errors)
+    i.RedirectBack(w, r)
+    return
+}
+```
+
+This gives identical behavior to `RenderErrors`.
+
+## Next Steps
+
+- [Precognition](/advanced/precognition/) - Real-time validation
+- [Flash Messages](/data/flash-messages/) - Other flash data

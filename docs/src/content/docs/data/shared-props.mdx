@@ -1,0 +1,140 @@
+---
+title: Shared Props
+description: Sharing data across all pages in a request.
+---
+
+Shared props are a way to make props available to every page without having to include them in each `Render` call. Common uses include user data, flash messages, and app configuration.
+
+## Basic Usage
+
+Use `Share` to add a prop that will be included in the current request's response:
+
+```go
+func MyMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        user := getAuthenticatedUser(r)
+        
+        inertia.Share(r, "auth", inertia.Value(map[string]any{
+            "user": user,
+        }))
+        
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+Now every page rendered in this request has access to `auth.user`.
+
+## ShareMultiple
+
+Add multiple shared props at once:
+
+```go
+inertia.ShareMultiple(r, inertia.Props{
+    "auth": inertia.Value(map[string]any{"user": user}),
+    "flash": inertia.Always(getFlashMessages(r)),
+    "appName": inertia.Value(config.AppName),
+})
+```
+
+## Prop Types with Shared
+
+Shared props work with all prop types:
+
+```go
+// Always fresh (even on partial reloads)
+inertia.Share(r, "notifications", inertia.Always(unreadCount))
+
+// Computed lazily
+inertia.Share(r, "permissions", inertia.Lazy(func(ctx context.Context) (any, error) {
+    return getPermissions(user.ID)
+}))
+
+// Once per session
+inertia.Share(r, "config", inertia.Once(func(ctx context.Context) (any, error) {
+    return loadAppConfig()
+}))
+```
+
+## Priority Order
+
+When the same key appears in multiple places, the priority is:
+
+1. **Page props** (passed to Render) - highest priority
+2. **Shared props** (from Share/ShareMultiple)
+3. **Flash data** (errors are merged)
+
+```go
+// In middleware
+inertia.Share(r, "user", inertia.Value(authUser))
+
+// In handler - this wins
+i.Render(w, r, "Page", inertia.Props{
+    "user": inertia.Value(differentUser),
+})
+```
+
+## Common Pattern: Auth Middleware
+
+```go
+func AuthMiddleware(i *inertia.Inertia) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            user := getSessionUser(r)
+            
+            inertia.ShareMultiple(r, inertia.Props{
+                "auth": inertia.Value(map[string]any{
+                    "user": user,
+                    "isAuthenticated": user != nil,
+                }),
+                "notifications": inertia.Always(func() int {
+                    if user != nil {
+                        return getUnreadCount(user.ID)
+                    }
+                    return 0
+                }()),
+            })
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+## Frontend Access
+
+Shared props appear alongside page props:
+
+```tsx
+// React
+import { usePage } from '@inertiajs/react'
+
+function Layout({ children }) {
+  const { auth, notifications } = usePage().props
+  
+  return (
+    <div>
+      <nav>
+        {auth.isAuthenticated ? (
+          <span>Welcome, {auth.user.name}</span>
+        ) : (
+          <Link href="/login">Login</Link>
+        )}
+        {notifications > 0 && <Badge count={notifications} />}
+      </nav>
+      {children}
+    </div>
+  )
+}
+```
+
+## Important Notes
+
+1. **Requires middleware**: Share only works if you've applied `i.Middleware()`
+2. **Request-scoped**: Shared props are tied to the current request, not global
+3. **Call before Render**: Share must be called before Render in the request lifecycle
+
+## Next Steps
+
+- [Flash Messages](/data/flash-messages/) - Session-based temporary data
+- [Validation Errors](/data/validation-errors/) - Handling form errors

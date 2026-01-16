@@ -1,0 +1,74 @@
+---
+title: inertigo
+description: Build modern React, Vue, or Svelte apps with Go - no API required.
+template: splash
+hero:
+  tagline: The Inertia.js adapter for Go. Build single-page apps without the complexity of a separate API.
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/joetifa2003/inertigo
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why Inertia?
+
+Building modern web apps usually means choosing between two painful options:
+
+1. **Traditional server-rendered apps** - Simple to build, but feel sluggish without the smooth transitions of an SPA
+2. **Single-page applications** - Great UX, but now you need to build an API, handle auth on both ends, manage client-side state, and deal with two separate codebases
+
+Inertia offers a third way. You keep your server-side routing, controllers, and data fetching exactly as you'd build a traditional web app. But instead of rendering HTML views, you render React, Vue, or Svelte components. The result is a fully client-side rendered SPA that feels instant, without any of the API complexity.
+
+## Why inertigo?
+
+**inertigo** brings Inertia.js to Go developers. If you're building web apps with Go and want the modern SPA experience without the overhead of building and maintaining a separate API, this is for you.
+
+<CardGrid>
+	<Card title="No API Required" icon="rocket">
+		Render React/Vue/Svelte components directly from your Go handlers. No REST endpoints, no GraphQL schemas, no duplicated validation logic.
+	</Card>
+	<Card title="Works With Any Router" icon="puzzle">
+		Use the standard library, Chi, Gorilla, Echo, Fiber - inertigo is just middleware that works with any `http.Handler`.
+	</Card>
+	<Card title="Server-Side Rendering" icon="laptop">
+		Built-in SSR support with QuickJS. Get fast initial page loads and proper SEO without a Node.js server.
+	</Card>
+	<Card title="Type-Safe Props" icon="approve-check">
+		Your Go structs become your component props. Catch errors at compile time, not in production.
+	</Card>
+</CardGrid>
+
+## Quick Example
+
+Here's what building with inertigo looks like:
+
+```go
+func (h *Handler) ShowUser(w http.ResponseWriter, r *http.Request) {
+    user, _ := h.db.GetUser(r.PathValue("id"))
+    
+    h.inertia.Render(w, r, "users/Show", inertia.Props{
+        "user": inertia.Value(user),
+    })
+}
+```
+
+That's it. No JSON marshaling, no API versioning, no separate frontend data fetching. Your React component receives the `user` prop directly from your Go code.
+
+## Ready to dive in?
+
+<CardGrid>
+	<Card title="Installation" icon="setting">
+		Get inertigo set up in your project in a few minutes.
+		<a href="/getting-started/installation/">Install now</a>
+	</Card>
+	<Card title="Learn the basics" icon="open-book">
+		Understand how Inertia works and why it might be right for your next project.
+		<a href="/introduction/what-is-inertia/">Read the introduction</a>
+	</Card>
+</CardGrid>

@@ -1,0 +1,107 @@
+---
+title: CSRF Protection  
+description: Protecting your forms from cross-site request forgery.
+---
+
+CSRF (Cross-Site Request Forgery) protection prevents malicious websites from making authenticated requests on behalf of your users. inertigo includes built-in CSRF protection.
+
+## Enabling CSRF
+
+```go
+i, _ := inertia.New(
+    bundler,
+    inertia.WithCSRF(true, false),  // enabled, cookieSecure
+)
+```
+
+The second parameter controls the `Secure` flag on the cookie:
+
+| Value | Use Case |
+|-------|----------|
+| `false` | Development (HTTP) |
+| `true` | Production (HTTPS required) |
+
+## How It Works
+
+1. **Token Generation**: On the first request, a random token is generated
+2. **Cookie Set**: The token is stored in an `XSRF-TOKEN` cookie (readable by JavaScript)
+3. **Header Validation**: On state-changing requests (POST, PUT, PATCH, DELETE), the server validates that `X-XSRF-TOKEN` header matches the cookie
+
+## Frontend Setup
+
+Most HTTP clients handle XSRF tokens automatically.
+
+### Axios (Used by Inertia)
+
+Axios reads the `XSRF-TOKEN` cookie and sends it as `X-XSRF-TOKEN` header automatically. No configuration needed.
+
+### Manual Setup
+
+If using a custom HTTP client:
+
+```javascript
+// Read the cookie
+const token = document.cookie
+  .split('; ')
+  .find(row => row.startsWith('XSRF-TOKEN='))
+  ?.split('=')[1]
+
+// Include in requests
+fetch('/api/data', {
+  method: 'POST',
+  headers: {
+    'X-XSRF-TOKEN': token,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(data),
+})
+```
+
+## Validation Logic
+
+The middleware checks:
+
+```go
+if isStateChangingMethod(r.Method) {
+    if !validateCSRF(r) {
+        http.Error(w, "CSRF token mismatch", http.StatusForbidden)
+        return
+    }
+}
+```
+
+State-changing methods: `POST`, `PUT`, `PATCH`, `DELETE`
+
+Validation passes when:
+- Cookie token is present and non-empty
+- Header token matches cookie token (constant-time comparison)
+
+## Cookie Configuration
+
+The XSRF-TOKEN cookie is set with:
+
+```go
+http.Cookie{
+    Name:     "XSRF-TOKEN",
+    Value:    token,
+    Path:     "/",
+    HttpOnly: false,     // Must be false so JS can read it
+    Secure:   config.cookieSecure,
+    SameSite: http.SameSiteLaxMode,
+}
+```
+
+`HttpOnly: false` is intentional - the JavaScript client needs to read the token to include it in request headers.
+
+## When to Disable
+
+You might disable CSRF if:
+
+- You're building a stateless API (use JWT or similar instead)
+- You have external authentication handling CSRF
+- You're in a controlled environment
+
+## Next Steps
+
+- [Precognition](/advanced/precognition/) - Real-time validation
+- [Middleware](/core-concepts/middleware/) - Where CSRF is enforced

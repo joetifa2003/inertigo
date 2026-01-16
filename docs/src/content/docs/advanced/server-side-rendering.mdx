@@ -1,0 +1,169 @@
+---
+title: Server-Side Rendering
+description: Rendering your pages on the server for faster loads and better SEO.
+---
+
+Server-side rendering (SSR) pre-renders your React, Vue, or Svelte components on the server. Users see content immediately instead of waiting for JavaScript to load and execute.
+
+## Benefits
+
+- **Faster First Paint**: HTML arrives ready to display
+- **Better SEO**: Search engines see fully rendered content
+- **Improved Accessibility**: Content is available before JS loads
+- **Social Sharing**: OG tags and previews work correctly
+
+## Enabling SSR
+
+Configure SSR when creating your Inertia instance:
+
+```go
+i, err := inertia.New(
+    bundler,
+    inertia.WithSSR(true, func() (inertia.SSREngine, error) {
+        return qjs.New(
+            qjs.WithSrcPath("dist/server/ssr.js"),
+        )
+    }),
+)
+```
+
+The factory function is called lazily on the first request, so startup is fast.
+
+## Dev Mode SSR
+
+In development, the Vite bundler provides its own SSR engine. You don't need to configure anything extra:
+
+```go
+bundler, _ := vite.New(
+    os.DirFS("dist"),
+    vite.WithDevMode(true),  // Enables Vite dev SSR automatically
+)
+
+i, _ := inertia.New(
+    bundler,
+    inertia.WithSSR(true, nil),  // Engine factory not used in dev
+)
+```
+
+The Vite dev server handles SSR rendering via its `/render` endpoint.
+
+## Production SSR with QuickJS
+
+For production, inertigo includes a QuickJS-based SSR engine. QuickJS is a lightweight JavaScript engine that runs in pure Go - no Node.js required.
+
+```go
+import "github.com/joetifa2003/inertigo/qjs"
+
+func newSSREngine() (inertia.SSREngine, error) {
+    return qjs.New(
+        qjs.WithSrcPath("dist/server/ssr.js"),
+        qjs.WithClusterSize(16),  // Pool of JS runtimes
+    )
+}
+```
+
+### Configuration Options
+
+| Option | Description |
+|--------|-------------|
+| `WithSrc(string)` | Load SSR bundle from string |
+| `WithSrcPath(string)` | Load from file path |
+| `WithSrcFS(fs.FS, path)` | Load from embedded FS |
+| `WithClusterSize(int)` | Number of JS runtime instances (default: 1) |
+
+### Cluster Size
+
+QuickJS runtimes are single-threaded. For concurrent requests, create a pool:
+
+```go
+qjs.WithClusterSize(16)  // Handle 16 concurrent SSR renders
+```
+
+A good starting point is 2x your CPU cores.
+
+## Building the SSR Bundle
+
+Your frontend needs an SSR entry point. Here's a React example:
+
+### vite.config.ts
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'src/main.tsx',
+        ssr: 'src/ssr.tsx',
+      },
+    },
+  },
+})
+```
+
+### src/ssr.tsx
+
+```tsx
+import { createInertiaApp } from '@inertiajs/react'
+import { renderToString } from 'react-dom/server'
+import { createElement } from 'react'
+
+export async function renderPage(page) {
+  return await createInertiaApp({
+    page,
+    render: renderToString,
+    resolve: name => {
+      const pages = import.meta.glob('./pages/**/*.tsx', { eager: true })
+      return pages[`./pages/${name}.tsx`]
+    },
+    setup: ({ App, props }) => createElement(App, props),
+  })
+}
+```
+
+Build with:
+
+```bash
+vite build --ssr src/ssr.tsx --outDir dist/server
+```
+
+## The SSREngine Interface
+
+For custom SSR implementations:
+
+```go
+type SSREngine interface {
+    Render(page PageObject) (RenderedPage, error)
+    Name() string
+}
+
+type RenderedPage struct {
+    Head []string  // Elements to insert in <head>
+    Body string    // Rendered component HTML
+}
+```
+
+You could implement this to call a Node.js server, use a different JS engine, etc.
+
+## Debug Logging
+
+Enable logging to see SSR timing:
+
+```go
+inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+```
+
+Output:
+
+```
+level=INFO msg="ssr engine started" engine=qjs dur=150ms
+level=INFO msg="ssr engine rendered page" engine=qjs dur=5ms
+```
+
+## Next Steps
+
+- [QuickJS SSR Engine](/bundlers/quickjs-ssr/) - Detailed QuickJS configuration
+- [Vite Bundler](/bundlers/vite/) - Dev and production asset handling

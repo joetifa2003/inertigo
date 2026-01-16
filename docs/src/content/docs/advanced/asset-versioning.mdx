@@ -1,0 +1,106 @@
+---
+title: Asset Versioning
+description: Force full page reloads when your assets change.
+---
+
+Asset versioning ensures users always get your latest JavaScript and CSS. When your assets change, Inertia forces a full page reload instead of an XHR navigation.
+
+## The Problem
+
+Without versioning, this happens:
+
+1. User loads your app (downloads app.js v1)
+2. You deploy new code (app.js v2)
+3. User navigates (XHR request)
+4. Server returns page expecting v2 components
+5. User's browser still has v1 - things break
+
+## The Solution
+
+With versioning enabled, step 3 becomes:
+
+3. User navigates (XHR with `X-Inertia-Version: v1`)
+4. Server sees version mismatch, returns `409 Conflict`
+5. Inertia does a full page reload
+6. User gets fresh assets (v2)
+
+## Enabling Versioning
+
+### Static Version
+
+```go
+inertia.WithVersion("1.0.0")
+```
+
+Update this string on each deploy.
+
+### File-Based Version (Recommended)
+
+```go
+inertia.WithVersionFromFile("dist/.vite/manifest.json")
+```
+
+This computes an MD5 hash of the file. When your assets change, the manifest changes, and the version updates automatically.
+
+### Embedded Filesystem
+
+```go
+//go:embed dist
+var distFS embed.FS
+
+inertia.WithVersionFromFileFS(distFS, "dist/.vite/manifest.json")
+```
+
+## How It Works
+
+The middleware handles version checking:
+
+```go
+// In i.Middleware()
+if r.Method == http.MethodGet &&
+   r.Header.Get("X-Inertia") == "true" &&
+   i.version != "" {
+    clientVersion := r.Header.Get("X-Inertia-Version")
+    if clientVersion != "" && clientVersion != i.version {
+        w.Header().Set("X-Inertia-Location", r.URL.String())
+        w.WriteHeader(http.StatusConflict)
+        return
+    }
+}
+```
+
+The client receives:
+
+```
+HTTP/1.1 409 Conflict
+X-Inertia-Location: /current-page
+```
+
+And performs a full page reload to that URL.
+
+## Version in Page Object
+
+The version is included in every response:
+
+```json
+{
+  "component": "Dashboard",
+  "props": {...},
+  "version": "abc123def456"
+}
+```
+
+The frontend sends this back on subsequent requests.
+
+## Best Practices
+
+1. **Use file hashing**: `WithVersionFromFile` catches all changes automatically
+
+2. **Hash the manifest**: Vite's manifest.json changes whenever any asset changes - it's ideal for versioning
+
+3. **Don't version too frequently**: Version changes cause full reloads. Use content-based hashing, not timestamps
+
+## Next Steps
+
+- [Middleware](/core-concepts/middleware/) - Where version checking happens
+- [CSRF Protection](/advanced/csrf-protection/) - Another security feature
