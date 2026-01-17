@@ -14,7 +14,7 @@ type deferredProp struct {
 // Deferred creates a prop that is excluded on initial page load.
 // The frontend will automatically request it via a partial reload.
 func Deferred(resolver PropFunc) Prop {
-	return &deferredProp{resolver: resolver}
+	return deferredProp{resolver: resolver}
 }
 
 // DeferredGroup creates a deferred prop with a specific group.

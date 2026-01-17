@@ -12,7 +12,7 @@ type lazyProp struct {
 // during rendering to produce the value. Unlike Optional or Deferred,
 // Lazy props are always included in the response (on full load).
 func Lazy(resolver PropFunc) Prop {
-	return &lazyProp{resolver: resolver}
+	return lazyProp{resolver: resolver}
 }
 
 func (p lazyProp) shouldInclude(key string, headers *inertiaHeaders) bool {

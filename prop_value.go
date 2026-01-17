@@ -7,6 +7,8 @@ type valueProp struct {
 	value any
 }
 
+// Value wraps a static value as a Prop.
+// Use this for props that don't require lazy evaluation or special behavior.
 func Value(value any) Prop {
 	return valueProp{value: value}
 }

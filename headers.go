@@ -5,20 +5,38 @@ import (
 	"strings"
 )
 
+// Inertia protocol headers.
 const (
-	XInertia                          = "X-Inertia"
-	XInertiaVersion                   = "X-Inertia-Version"
-	XInertiaLocation                  = "X-Inertia-Location"
-	XInertiaPartialData               = "X-Inertia-Partial-Data"
-	XInertiaPartialComponent          = "X-Inertia-Partial-Component"
-	XInertiaPartialExcept             = "X-Inertia-Partial-Except"
-	XInertiaErrorBag                  = "X-Inertia-Error-Bag"
+	// XInertia indicates an Inertia request when set to "true".
+	XInertia = "X-Inertia"
+	// XInertiaVersion contains the client's asset version for cache busting.
+	XInertiaVersion = "X-Inertia-Version"
+	// XInertiaLocation is used in 409 responses to trigger a full page reload.
+	XInertiaLocation = "X-Inertia-Location"
+	// XInertiaPartialData specifies which props to include in a partial reload.
+	XInertiaPartialData = "X-Inertia-Partial-Data"
+	// XInertiaPartialComponent specifies the component for partial reloads.
+	XInertiaPartialComponent = "X-Inertia-Partial-Component"
+	// XInertiaPartialExcept specifies which props to exclude in a partial reload.
+	XInertiaPartialExcept = "X-Inertia-Partial-Except"
+	// XInertiaErrorBag specifies the error bag name for scoped validation errors.
+	XInertiaErrorBag = "X-Inertia-Error-Bag"
+	// XInertiaInfiniteScrollMergeIntent specifies merge direction ("append" or "prepend").
 	XInertiaInfiniteScrollMergeIntent = "X-Inertia-Infinite-Scroll-Merge-Intent"
-	XInertiaExceptOnceProps           = "X-Inertia-Except-Once-Props"
-	XInertiaReset                     = "X-Inertia-Reset"
-	HeaderPrecognition                = "Precognition"
-	HeaderPrecognitionValidateOnly    = "Precognition-Validate-Only"
-	HeaderPrecognitionSuccess         = "Precognition-Success"
+	// XInertiaExceptOnceProps lists once props the client already has cached.
+	XInertiaExceptOnceProps = "X-Inertia-Except-Once-Props"
+	// XInertiaReset specifies scroll props to reset.
+	XInertiaReset = "X-Inertia-Reset"
+)
+
+// Precognition headers for real-time validation.
+const (
+	// HeaderPrecognition indicates a precognition validation request.
+	HeaderPrecognition = "Precognition"
+	// HeaderPrecognitionValidateOnly specifies which fields to validate.
+	HeaderPrecognitionValidateOnly = "Precognition-Validate-Only"
+	// HeaderPrecognitionSuccess indicates successful validation.
+	HeaderPrecognitionSuccess = "Precognition-Success"
 )
 
 type inertiaHeaders struct {

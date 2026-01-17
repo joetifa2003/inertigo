@@ -28,7 +28,7 @@ func main() {
 	i, err := inertia.New(
 		bundler,
 		inertia.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil))),
-		inertia.WithRooHtmlPathFS(os.DirFS("assets"), "index.html"),
+		inertia.WithRootHtmlPathFS(os.DirFS("assets"), "index.html"),
 		inertia.WithSSR(true, func() (inertia.SSREngine, error) {
 			return qjs.New(
 				qjs.WithSrcPath("assets/dist/server/ssr.js"),

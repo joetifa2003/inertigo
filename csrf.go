@@ -42,13 +42,11 @@ func setCSRFCookie(w http.ResponseWriter, token string, config csrfConfig) {
 }
 
 func validateCSRF(r *http.Request) bool {
-	// Get token from cookie
 	cookie, err := r.Cookie(csrfCookieName)
 	if err != nil || cookie.Value == "" {
 		return false
 	}
 
-	// Get token from header
 	headerToken := r.Header.Get(csrfHeaderName)
 	if headerToken == "" {
 		return false

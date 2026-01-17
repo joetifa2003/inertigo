@@ -60,3 +60,38 @@ func TestRedirect(t *testing.T) {
 		})
 	}
 }
+
+func TestLocation(t *testing.T) {
+	inertia := &Inertia{}
+
+	t.Run("Inertia request should use 409 Conflict and X-Inertia-Location header", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/current", nil)
+		r.Header.Set("X-Inertia", "true")
+
+		inertia.Location(w, r, "https://external.com")
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("expected status %d, got %d", http.StatusConflict, w.Code)
+		}
+
+		if location := w.Header().Get("X-Inertia-Location"); location != "https://external.com" {
+			t.Errorf("expected X-Inertia-Location header %q, got %q", "https://external.com", location)
+		}
+	})
+
+	t.Run("Standard request should use 302 Found (or 303 See Other)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/current", nil)
+
+		inertia.Location(w, r, "https://external.com")
+
+		if w.Code != http.StatusFound {
+			t.Errorf("expected status %d, got %d", http.StatusFound, w.Code)
+		}
+
+		if location := w.Header().Get("Location"); location != "https://external.com" {
+			t.Errorf("expected Location header %q, got %q", "https://external.com", location)
+		}
+	})
+}

@@ -17,13 +17,9 @@ func Optional(resolver PropFunc) Prop {
 }
 
 func (p optionalProp) shouldInclude(key string, headers *inertiaHeaders) bool {
+	// Only include if explicitly requested in a partial reload
 	if headers.IsPartial && len(headers.PartialData) > 0 {
-		if slices.Contains(headers.PartialData, key) {
-			return true
-		}
-	}
-	if len(headers.PartialExcept) > 0 && slices.Contains(headers.PartialExcept, key) {
-		return false
+		return slices.Contains(headers.PartialData, key)
 	}
 	return false
 }

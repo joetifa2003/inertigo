@@ -86,7 +86,8 @@ func WithRootHtmlPath(root string) InertiaOption {
 	}
 }
 
-func WithRooHtmlPathFS(fsys fs.FS, path string) InertiaOption {
+// WithRootHtmlPathFS sets the root HTML template path from an fs.FS.
+func WithRootHtmlPathFS(fsys fs.FS, path string) InertiaOption {
 	return func(config *inertiaConfig) error {
 		config.rootTemplateFS = fsys
 		config.rootTemplatePath = path
@@ -94,9 +95,10 @@ func WithRooHtmlPathFS(fsys fs.FS, path string) InertiaOption {
 	}
 }
 
+// WithSSR enables server-side rendering with the provided SSR engine factory.
 func WithSSR(enabled bool, engineFactory func() (SSREngine, error)) InertiaOption {
 	return func(config *inertiaConfig) error {
-		config.ssrEnabled = true
+		config.ssrEnabled = enabled
 		config.ssrEngineFactory = engineFactory
 		return nil
 	}
@@ -167,6 +169,8 @@ func WithCSRF(enabled bool, cookieSecure bool) InertiaOption {
 	}
 }
 
+// Logger defines the interface for structured logging.
+// Compatible with slog.Logger.
 type Logger interface {
 	Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
@@ -259,8 +263,11 @@ func getInertiaContext(r *http.Request) *inertiaContext {
 	return nil
 }
 
+// RootHtmlView is the data passed to the root HTML template.
 type RootHtmlView struct {
+	// InertiaHead contains SSR-rendered head elements.
 	InertiaHead template.HTML
+	// InertiaBody contains the SSR-rendered body or data-page div.
 	InertiaBody template.HTML
 }
 
@@ -428,6 +435,8 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 	return i.rootTemplate.Execute(w, view)
 }
 
+// PageObject is the JSON structure sent to the Inertia client.
+// It contains all the data needed to render a page component.
 type PageObject struct {
 	Component      string                        `json:"component"`
 	URL            string                        `json:"url"`
@@ -578,6 +587,19 @@ func (i *Inertia) RedirectBack(w http.ResponseWriter, r *http.Request) {
 	url := r.Header.Get("Referer")
 	if url == "" {
 		url = "/"
+	}
+
+	i.Redirect(w, r, url)
+}
+
+// Location performs a server-side redirect to an external website or non-Inertia endpoint.
+// For Inertia requests, it returns a 409 Conflict with the X-Inertia-Location header.
+// For standard requests, it performs a standard server-side redirect.
+func (i *Inertia) Location(w http.ResponseWriter, r *http.Request, url string) {
+	if r.Header.Get(XInertia) == "true" {
+		w.Header().Set(XInertiaLocation, url)
+		w.WriteHeader(http.StatusConflict)
+		return
 	}
 
 	i.Redirect(w, r, url)

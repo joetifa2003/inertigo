@@ -156,7 +156,6 @@ func (q *Engine) Render(page inertia.PageObject) (inertia.RenderedPage, error) {
 	if err != nil {
 		return inertia.RenderedPage{}, err
 	}
-	defer res.Free()
 
 	return p, nil
 }
