@@ -1,0 +1,44 @@
+version: "0.5"
+is_tui_disabled: true
+processes:
+  build-go-dev:
+    command: go build -o bin/dev .
+
+  start-go-dev:
+    command: ./bin/dev -dev
+    depends_on:
+      build-go-dev:
+        condition: process_completed
+
+  start-vite-dev:
+    working_dir: assets
+    command: pnpm vite --clearScreen false
+
+  dev:
+    depends_on:
+      start-vite-dev:
+        condition: process_started
+      start-go-dev:
+        condition: process_started
+
+  build-vite-prod:
+    working_dir: assets
+    command: pnpm vite build
+
+  build-vite-prod-ssr:
+    working_dir: assets
+    command: pnpm vite build --ssr ts/ssr.ts --outDir dist/server
+
+  build-prod:
+    command: go build -ldflags="-s -w" -o bin/prod .
+    depends_on:
+      build-vite-prod:
+        condition: process_completed_successfully
+      build-vite-prod-ssr:
+        condition: process_completed_successfully
+
+  preview:
+    command: ./bin/prod
+    depends_on:
+      build-prod:
+        condition: process_completed

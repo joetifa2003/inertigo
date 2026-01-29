@@ -19,7 +19,6 @@ func main() {
 	bundler, err := vite.New(
 		os.DirFS("assets/dist"),
 		vite.WithDevMode(*isDev),
-		vite.WithReactRefresh(),
 	)
 	must(err)
 

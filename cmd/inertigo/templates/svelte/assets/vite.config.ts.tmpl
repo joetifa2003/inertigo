@@ -1,0 +1,17 @@
+import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+import inertigo from "inertigo-vite";
+
+export default defineConfig(({ isSsrBuild }) => ({
+  plugins: [
+    svelte({
+      compilerOptions: {
+        hydratable: true,
+      },
+    }),
+    inertigo({
+      entryPoint: "./ts/app.ts",
+      {{ if .SSR }}ssrEntryPoint: "./ts/ssr.ts",{{ end }}
+    }),
+  ],
+}));
