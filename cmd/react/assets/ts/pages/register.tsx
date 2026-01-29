@@ -5,23 +5,7 @@ export default function Register(props) {
   const formRef = useRef(null);
 
   return (
-    <Form
-      ref={formRef}
-      action="/users"
-      method="post"
-      onError={(errors) => {
-        // WORKAROUND: Manually sync errors to precognition validator
-        // This fixes the issue where precognition success (204) doesn't clear errors
-        // See: inertia-issue.md for details
-        //
-        // uncomment the following lines to fix the issue
-        // if (formRef.current) {
-        //   Object.entries(errors).forEach(([key, value]) => {
-        //     formRef.current.setError(key, value);
-        //   });
-        // }
-      }}
-    >
+    <Form ref={formRef} action="/users" method="post">
       {({ errors, invalid, validate, validating, setError }) => {
         return (
           <>

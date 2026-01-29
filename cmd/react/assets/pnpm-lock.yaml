@@ -13,8 +13,8 @@ importers:
         version: 0.1.0(vite@7.3.0(@types/node@25.0.3)(lightningcss@1.30.2))
     devDependencies:
       '@inertiajs/react':
-        specifier: ^2.3.8
-        version: 2.3.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^2.3.12
+        version: 2.3.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/node':
         specifier: ^25.0.3
         version: 25.0.3
@@ -290,11 +290,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@inertiajs/core@2.3.8':
-    resolution: {integrity: sha512-WIF/ea9FH+yR/nLLrOX9TNN20X2pcHZBLQJYCLZ/oLMaS6GSlnMtHZv5GtKNjmIpSiMvg2PiAqtDF/mvbnr+rQ==}
+  '@inertiajs/core@2.3.12':
+    resolution: {integrity: sha512-fHzCe4e4bGbOz5m2hbSm5U6UpmdWeaC4nqzKUXva9zuX3auoyGH2P/zBlwMt3QG8je3g1nxUQ7XKM5xpsLFTHQ==}
 
-  '@inertiajs/react@2.3.8':
-    resolution: {integrity: sha512-n/e8QrOicGMQc1g9POdAHm2lgk1D5armOvPwRK0U6QY9zhySj3rbKxbKJmXA6K0LnCMh384AuBMAu2COThLmsA==}
+  '@inertiajs/react@2.3.12':
+    resolution: {integrity: sha512-0xMjkqddrN0A0iY8tY+FCDOzlviSalWMly+XhitLuFD+R9h/CUvVssxNyTFF17I0bC07f1yqwYMPhDvfQv71XQ==}
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -711,8 +711,8 @@ packages:
     resolution: {integrity: sha512-utfs7Pr5uJyyvDETitgsaqSyjCb2qNRAtuqUeWIAKztsOYdcACf2KtARYXg2pSvhkt+9NfoaNY7fxjl6nuMjIQ==}
     engines: {node: '>= 12.0.0'}
 
-  lodash-es@4.17.22:
-    resolution: {integrity: sha512-XEawp1t0gxSi9x01glktRZ5HDy0HXqrM0x5pXQM98EaI0NxO6jVM7omDOxsuEo5UIASAnm2bRp1Jt/e0a2XU8Q==}
+  lodash-es@4.17.23:
+    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
@@ -1085,22 +1085,22 @@ snapshots:
   '@esbuild/win32-x64@0.27.2':
     optional: true
 
-  '@inertiajs/core@2.3.8':
+  '@inertiajs/core@2.3.12':
     dependencies:
       '@types/lodash-es': 4.17.12
       axios: 1.13.2
       laravel-precognition: 1.0.0
-      lodash-es: 4.17.22
+      lodash-es: 4.17.23
       qs: 6.14.1
     transitivePeerDependencies:
       - debug
 
-  '@inertiajs/react@2.3.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@inertiajs/react@2.3.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
-      '@inertiajs/core': 2.3.8
+      '@inertiajs/core': 2.3.12
       '@types/lodash-es': 4.17.12
       laravel-precognition: 1.0.0
-      lodash-es: 4.17.22
+      lodash-es: 4.17.23
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
     transitivePeerDependencies:
@@ -1424,7 +1424,7 @@ snapshots:
   laravel-precognition@1.0.0:
     dependencies:
       axios: 1.13.2
-      lodash-es: 4.17.22
+      lodash-es: 4.17.23
     transitivePeerDependencies:
       - debug
 
@@ -1478,7 +1478,7 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.30.2
     optional: true
 
-  lodash-es@4.17.22: {}
+  lodash-es@4.17.23: {}
 
   lru-cache@5.1.1:
     dependencies:
