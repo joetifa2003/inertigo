@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	inertia "github.com/joetifa2003/inertigo"
 	"github.com/joetifa2003/inertigo/qjs"
@@ -44,7 +45,16 @@ func main() {
 	mux.Handle(bundler.AssetPrefix(), bundler.Handler())
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err = i.Render(w, r, "index", nil)
+		err = i.Render(w, r, "index", inertia.Props{
+			"message": inertia.Value("Hello, world!"),
+			"reviews": inertia.Deferred(func(ctx context.Context) (any, error) {
+				time.Sleep(time.Second)
+				return []string{"Great", "Awesome", "Cool"}, nil
+			}),
+			"date": inertia.Lazy(func(ctx context.Context) (any, error) {
+				return time.Now().String(), nil
+			}),
+		})
 		if err != nil {
 			slog.Error(err.Error())
 			http.Error(w, "internal server error", http.StatusInternalServerError)

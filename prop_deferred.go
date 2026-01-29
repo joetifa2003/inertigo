@@ -36,9 +36,10 @@ func (p deferredProp) resolve(ctx context.Context) (any, error) {
 }
 
 func (p deferredProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
-	if p.shouldInclude(key, headers) {
+	if headers.IsPartial {
 		return
 	}
+
 	group := p.group
 	if group == "" {
 		group = "default"

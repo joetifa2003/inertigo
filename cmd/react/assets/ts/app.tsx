@@ -2,7 +2,7 @@ import { createInertiaApp } from "@inertiajs/react";
 import { hydrateRoot } from "react-dom/client";
 import "../styles/app.css";
 
-const pages = import.meta.glob("./pages/**/*.tsx");
+const pages = import.meta.glob("./pages/**/*.tsx", { eager: true });
 
 createInertiaApp({
   resolve: (name) => {

@@ -1,4 +1,4 @@
-import { Form } from "@inertiajs/react";
+import { Form, router } from "@inertiajs/react";
 import { useRef } from "react";
 
 export default function Register(props) {
