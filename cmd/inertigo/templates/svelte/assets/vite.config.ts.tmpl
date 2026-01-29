@@ -4,11 +4,7 @@ import inertigo from "inertigo-vite";
 
 export default defineConfig(({ isSsrBuild }) => ({
   plugins: [
-    svelte({
-      compilerOptions: {
-        hydratable: true,
-      },
-    }),
+    svelte(),
     inertigo({
       entryPoint: "./ts/app.ts",
       {{ if .SSR }}ssrEntryPoint: "./ts/ssr.ts",{{ end }}
