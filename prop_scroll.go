@@ -13,27 +13,32 @@ type ScrollMetadata struct {
 	CurrentPage  any    // int or string (for cursor pagination)
 }
 
-// scrollProp represents a paginated property for infinite scrolling.
-type scrollProp struct {
-	resolver PropFunc
+// ScrollProp represents a paginated property for infinite scrolling.
+type ScrollProp[T any] struct {
+	resolver Resolver[[]T]
 	wrapper  string
 	metadata *ScrollMetadata
 }
 
 // ScrollOption configures ScrollProp creation.
-type ScrollOption func(*scrollProp)
+type ScrollOption func(*scrollConfig)
+
+type scrollConfig struct {
+	wrapper  string
+	metadata *ScrollMetadata
+}
 
 // WithWrapper sets the data wrapper key path (default: "data").
 func WithWrapper(wrapper string) ScrollOption {
-	return func(s *scrollProp) {
-		s.wrapper = wrapper
+	return func(c *scrollConfig) {
+		c.wrapper = wrapper
 	}
 }
 
 // WithScrollMetadata sets static scroll metadata.
 func WithScrollMetadata(metadata ScrollMetadata) ScrollOption {
-	return func(s *scrollProp) {
-		s.metadata = &metadata
+	return func(c *scrollConfig) {
+		c.metadata = &metadata
 	}
 }
 
@@ -52,35 +57,34 @@ func WithScrollMetadata(metadata ScrollMetadata) ScrollOption {
 //
 // This produces response: {"posts": {"data": [...]}}
 // With merge path: "posts.data"
-func Scroll[T any](resolver func(ctx context.Context) ([]T, error), opts ...ScrollOption) Prop {
-	sp := scrollProp{
+func Scroll[T any](resolver Resolver[[]T], opts ...ScrollOption) ScrollProp[T] {
+	cfg := &scrollConfig{
 		wrapper: "data",
 	}
 	for _, opt := range opts {
-		opt(&sp)
+		opt(cfg)
 	}
 
-	// Wrap the typed resolver with automatic data wrapping
-	sp.resolver = func(ctx context.Context) (any, error) {
-		items, err := resolver(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{sp.wrapper: items}, nil
+	return ScrollProp[T]{
+		resolver: resolver,
+		wrapper:  cfg.wrapper,
+		metadata: cfg.metadata,
 	}
-
-	return sp
 }
 
-func (p scrollProp) shouldInclude(key string, headers *inertiaHeaders) bool {
+func (p ScrollProp[T]) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return defaultShouldInclude(key, headers)
 }
 
-func (p scrollProp) resolve(ctx context.Context) (any, error) {
-	return p.resolver(ctx)
+func (p ScrollProp[T]) resolve(ctx context.Context) (any, error) {
+	items, err := p.resolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{p.wrapper: items}, nil
 }
 
-func (p scrollProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+func (p ScrollProp[T]) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
 	if !p.shouldInclude(key, headers) {
 		return
 	}
@@ -102,7 +106,7 @@ func (p scrollProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp
 	}
 }
 
-func (p *scrollProp) getMetadata() *ScrollMetadata {
+func (p ScrollProp[T]) getMetadata() *ScrollMetadata {
 	if p.metadata != nil {
 		return p.metadata
 	}

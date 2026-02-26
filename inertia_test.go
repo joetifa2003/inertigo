@@ -25,10 +25,37 @@ func TestRender_PartialReload(t *testing.T) {
 	i, err := inertia.New(bundler)
 	require.NoError(t, err)
 
+	type FooBazProps struct {
+		Foo string `json:"foo"`
+		Baz string `json:"baz"`
+	}
+
+	type FooDefProps struct {
+		Foo string                       `json:"foo"`
+		Def inertia.DeferredProp[string] `json:"def"`
+	}
+
+	type OptProps struct {
+		Opt inertia.OptionalProp[string] `json:"opt"`
+	}
+
+	type AlwaysOtherProps struct {
+		Alw   inertia.AlwaysProp[string] `json:"alw"`
+		Other string                     `json:"other"`
+	}
+
+	type OnceProps struct {
+		Onc inertia.OnceProp[string] `json:"onc"`
+	}
+
+	type OnceExpProps struct {
+		OncExp inertia.OnceProp[string] `json:"onc_exp"`
+	}
+
 	tests := []struct {
 		name            string
 		headers         map[string]string
-		props           inertia.Props
+		props           any
 		expectedProps   []string
 		unexpectedProps []string
 	}{
@@ -37,9 +64,9 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				inertia.XInertia: "true",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"baz": inertia.Value("qux"),
+			props: FooBazProps{
+				Foo: "bar",
+				Baz: "qux",
 			},
 			expectedProps: []string{"foo", "baz", "errors"},
 		},
@@ -50,9 +77,9 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialData:      "foo",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"baz": inertia.Value("qux"),
+			props: FooBazProps{
+				Foo: "bar",
+				Baz: "qux",
 			},
 			expectedProps:   []string{"foo"},
 			unexpectedProps: []string{"baz"},
@@ -64,9 +91,9 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialData:      "foo,baz",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"baz": inertia.Value("qux"),
+			props: FooBazProps{
+				Foo: "bar",
+				Baz: "qux",
 			},
 			expectedProps: []string{"foo", "baz"},
 		},
@@ -77,9 +104,9 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialExcept:    "foo",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"baz": inertia.Value("qux"),
+			props: FooBazProps{
+				Foo: "bar",
+				Baz: "qux",
 			},
 			expectedProps:   []string{"baz", "errors"},
 			unexpectedProps: []string{"foo"},
@@ -89,9 +116,9 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				inertia.XInertia: "true",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
+			props: FooDefProps{
+				Foo: "bar",
+				Def: inertia.Deferred(func(ctx context.Context) (string, error) { return "deferred", nil }),
 			},
 			expectedProps:   []string{"foo", "errors"},
 			unexpectedProps: []string{"def"},
@@ -103,9 +130,9 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialData:      "def",
 			},
-			props: inertia.Props{
-				"foo": inertia.Value("bar"),
-				"def": inertia.Deferred(func(ctx context.Context) (any, error) { return "deferred", nil }),
+			props: FooDefProps{
+				Foo: "bar",
+				Def: inertia.Deferred(func(ctx context.Context) (string, error) { return "deferred", nil }),
 			},
 			expectedProps:   []string{"def"},
 			unexpectedProps: []string{"foo"},
@@ -115,8 +142,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				inertia.XInertia: "true",
 			},
-			props: inertia.Props{
-				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
+			props: OptProps{
+				Opt: inertia.Optional(func(ctx context.Context) (string, error) { return "optional", nil }),
 			},
 			expectedProps:   []string{"errors"},
 			unexpectedProps: []string{"opt"},
@@ -128,8 +155,8 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialData:      "opt",
 			},
-			props: inertia.Props{
-				"opt": inertia.Optional(func(ctx context.Context) (any, error) { return "optional", nil }),
+			props: OptProps{
+				Opt: inertia.Optional(func(ctx context.Context) (string, error) { return "optional", nil }),
 			},
 			expectedProps: []string{"opt"},
 		},
@@ -140,9 +167,9 @@ func TestRender_PartialReload(t *testing.T) {
 				inertia.XInertiaPartialComponent: "TestComponent",
 				inertia.XInertiaPartialData:      "other",
 			},
-			props: inertia.Props{
-				"alw":   inertia.Always("always"),
-				"other": inertia.Value("other"),
+			props: AlwaysOtherProps{
+				Alw:   inertia.Always("always"),
+				Other: "other",
 			},
 			expectedProps: []string{"alw", "other"},
 		},
@@ -151,8 +178,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				inertia.XInertia: "true",
 			},
-			props: inertia.Props{
-				"onc": inertia.Once(func(ctx context.Context) (any, error) { return "once", nil }),
+			props: OnceProps{
+				Onc: inertia.Once(func(ctx context.Context) (string, error) { return "once", nil }),
 			},
 			expectedProps: []string{"onc", "errors"},
 		},
@@ -161,8 +188,8 @@ func TestRender_PartialReload(t *testing.T) {
 			headers: map[string]string{
 				inertia.XInertia: "true",
 			},
-			props: inertia.Props{
-				"onc_exp": inertia.Once(func(ctx context.Context) (any, error) { return "once_exp", nil }, inertia.OnceUntil(1*time.Hour)),
+			props: OnceExpProps{
+				OncExp: inertia.Once(func(ctx context.Context) (string, error) { return "once_exp", nil }, inertia.OnceUntil(1*time.Hour)),
 			},
 			expectedProps: []string{"onc_exp", "errors"},
 		},
@@ -207,7 +234,11 @@ func TestRender_VersionInPageObject(t *testing.T) {
 	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
-	err = i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")})
+	type FooProps struct {
+		Foo string `json:"foo"`
+	}
+
+	err = i.Render(w, req, "TestComponent", FooProps{Foo: "bar"})
 	require.NoError(t, err)
 
 	var resp inertia.PageObject
@@ -331,6 +362,10 @@ func TestRender_EncryptHistoryOption(t *testing.T) {
 	i, err := inertia.New(bundler)
 	require.NoError(t, err)
 
+	type FooProps struct {
+		Foo string `json:"foo"`
+	}
+
 	tests := []struct {
 		name          string
 		options       []inertia.RenderOption
@@ -359,7 +394,7 @@ func TestRender_EncryptHistoryOption(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
+			err := i.Render(w, req, "TestComponent", FooProps{Foo: "bar"}, tt.options...)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
@@ -377,6 +412,10 @@ func TestRender_ClearHistoryOption(t *testing.T) {
 
 	i, err := inertia.New(bundler)
 	require.NoError(t, err)
+
+	type FooProps struct {
+		Foo string `json:"foo"`
+	}
 
 	tests := []struct {
 		name          string
@@ -406,7 +445,7 @@ func TestRender_ClearHistoryOption(t *testing.T) {
 			req.Header.Set(inertia.XInertia, "true")
 			w := httptest.NewRecorder()
 
-			err := i.Render(w, req, "TestComponent", inertia.Props{"foo": inertia.Value("bar")}, tt.options...)
+			err := i.Render(w, req, "TestComponent", FooProps{Foo: "bar"}, tt.options...)
 			require.NoError(t, err)
 
 			var resp inertia.PageObject
@@ -425,9 +464,25 @@ func TestRender_MergeProp(t *testing.T) {
 	i, err := inertia.New(bundler)
 	require.NoError(t, err)
 
+	type BasicMergeProps struct {
+		Posts inertia.MergeProp[[]string] `json:"posts"`
+	}
+	type AppendMergeProps struct {
+		Results inertia.MergeProp[map[string]any] `json:"results"`
+	}
+	type PrependMergeProps struct {
+		Messages inertia.MergeProp[[]string] `json:"messages"`
+	}
+	type DeepMergeProps struct {
+		Settings inertia.MergeProp[map[string]any] `json:"settings"`
+	}
+	type MatchOnMergeProps struct {
+		Users inertia.MergeProp[[]map[string]any] `json:"users"`
+	}
+
 	tests := []struct {
 		name                   string
-		props                  inertia.Props
+		props                  any
 		expectedMergeProps     []string
 		expectedPrependProps   []string
 		expectedDeepMergeProps []string
@@ -435,8 +490,8 @@ func TestRender_MergeProp(t *testing.T) {
 	}{
 		{
 			name: "basic Merge prop",
-			props: inertia.Props{
-				"posts": inertia.Merge(func(ctx context.Context) (any, error) {
+			props: BasicMergeProps{
+				Posts: inertia.Merge(func(ctx context.Context) ([]string, error) {
 					return []string{"post1", "post2"}, nil
 				}),
 			},
@@ -444,8 +499,8 @@ func TestRender_MergeProp(t *testing.T) {
 		},
 		{
 			name: "Merge with Append paths",
-			props: inertia.Props{
-				"results": inertia.Merge(func(ctx context.Context) (any, error) {
+			props: AppendMergeProps{
+				Results: inertia.Merge(func(ctx context.Context) (map[string]any, error) {
 					return map[string]any{"data": []string{"item1"}}, nil
 				}, inertia.Append("data")),
 			},
@@ -453,8 +508,8 @@ func TestRender_MergeProp(t *testing.T) {
 		},
 		{
 			name: "Merge with Prepend paths",
-			props: inertia.Props{
-				"messages": inertia.Merge(func(ctx context.Context) (any, error) {
+			props: PrependMergeProps{
+				Messages: inertia.Merge(func(ctx context.Context) ([]string, error) {
 					return []string{"msg1"}, nil
 				}, inertia.Prepend("items")),
 			},
@@ -462,8 +517,8 @@ func TestRender_MergeProp(t *testing.T) {
 		},
 		{
 			name: "Merge with DeepMerge",
-			props: inertia.Props{
-				"settings": inertia.Merge(func(ctx context.Context) (any, error) {
+			props: DeepMergeProps{
+				Settings: inertia.Merge(func(ctx context.Context) (map[string]any, error) {
 					return map[string]any{"theme": "dark"}, nil
 				}, inertia.MergeDeepMerge()),
 			},
@@ -471,8 +526,8 @@ func TestRender_MergeProp(t *testing.T) {
 		},
 		{
 			name: "Merge with MatchOn",
-			props: inertia.Props{
-				"users": inertia.Merge(func(ctx context.Context) (any, error) {
+			props: MatchOnMergeProps{
+				Users: inertia.Merge(func(ctx context.Context) ([]map[string]any, error) {
 					return []map[string]any{{"id": 1, "name": "Alice"}}, nil
 				}, inertia.MergeMatchOn("id")),
 			},
@@ -513,10 +568,15 @@ func TestRender_MultipleOptionsComposability(t *testing.T) {
 	req.Header.Set(inertia.XInertia, "true")
 	w := httptest.NewRecorder()
 
+	type ComposableProps struct {
+		Data  string                      `json:"data"`
+		Items inertia.MergeProp[[]string] `json:"items"`
+	}
+
 	// Test that all remaining render options can be used together with Merge props
-	err = i.Render(w, req, "TestComponent", inertia.Props{
-		"data": inertia.Value("value"),
-		"items": inertia.Merge(func(ctx context.Context) (any, error) {
+	err = i.Render(w, req, "TestComponent", ComposableProps{
+		Data: "value",
+		Items: inertia.Merge(func(ctx context.Context) ([]string, error) {
 			return []string{"item1"}, nil
 		}),
 	},
@@ -726,8 +786,12 @@ func TestRender_LazyProp(t *testing.T) {
 		req.Header.Set(inertia.XInertia, "true")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "TestComponent", inertia.Props{
-			"users": inertia.Lazy(func(ctx context.Context) (any, error) {
+		type UsersProps struct {
+			Users inertia.LazyProp[[]string] `json:"users"`
+		}
+
+		err := i.Render(w, req, "TestComponent", UsersProps{
+			Users: inertia.Lazy(func(ctx context.Context) ([]string, error) {
 				callCount++
 				return []string{"user1", "user2"}, nil
 			}),
@@ -749,11 +813,16 @@ func TestRender_LazyProp(t *testing.T) {
 		req.Header.Set(inertia.XInertiaPartialData, "users")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "TestComponent", inertia.Props{
-			"users": inertia.Lazy(func(ctx context.Context) (any, error) {
+		type UsersOtherProps struct {
+			Users inertia.LazyProp[[]string] `json:"users"`
+			Other string                     `json:"other"`
+		}
+
+		err := i.Render(w, req, "TestComponent", UsersOtherProps{
+			Users: inertia.Lazy(func(ctx context.Context) ([]string, error) {
 				return []string{"user1", "user2"}, nil
 			}),
-			"other": inertia.Value("data"),
+			Other: "data",
 		})
 		require.NoError(t, err)
 
@@ -773,13 +842,22 @@ func TestRender_ScrollProp(t *testing.T) {
 	i, err := inertia.New(bundler)
 	require.NoError(t, err)
 
+	type PostsProps struct {
+		Posts inertia.ScrollProp[string] `json:"posts"`
+	}
+
+	type FooPostsProps struct {
+		Foo   string                     `json:"foo"`
+		Posts inertia.ScrollProp[string] `json:"posts"`
+	}
+
 	t.Run("ScrollProp with metadata - initial load", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set(inertia.XInertia, "true")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1", "post2"}, nil
 			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
 				PageName:     "page",
@@ -817,8 +895,8 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertia, "true")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1"}, nil
 			}, inertia.WithWrapper("items")),
 		})
@@ -843,8 +921,8 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertiaInfiniteScrollMergeIntent, "prepend")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1"}, nil
 			}),
 		})
@@ -864,8 +942,8 @@ func TestRender_ScrollProp(t *testing.T) {
 		// No merge intent header - should default to append
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1"}, nil
 			}),
 		})
@@ -885,8 +963,8 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertiaReset, "posts")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1"}, nil
 			}),
 		})
@@ -905,8 +983,8 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertia, "true")
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", PostsProps{
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				return []string{"post1"}, nil
 			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
 				PageName:     "cursor",
@@ -936,9 +1014,9 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertiaPartialData, "foo") // Only request "foo", not "posts"
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"foo": inertia.Value("bar"),
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", FooPostsProps{
+			Foo: "bar",
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				resolverCalled = true
 				return []string{"post1"}, nil
 			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{
@@ -969,9 +1047,9 @@ func TestRender_ScrollProp(t *testing.T) {
 		req.Header.Set(inertia.XInertiaPartialData, "posts") // Request "posts"
 		w := httptest.NewRecorder()
 
-		err := i.Render(w, req, "Posts/Index", inertia.Props{
-			"foo": inertia.Value("bar"),
-			"posts": inertia.Scroll(func(ctx context.Context) ([]string, error) {
+		err := i.Render(w, req, "Posts/Index", FooPostsProps{
+			Foo: "bar",
+			Posts: inertia.Scroll(func(ctx context.Context) ([]string, error) {
 				resolverCalled = true
 				return []string{"post1"}, nil
 			}, inertia.WithScrollMetadata(inertia.ScrollMetadata{

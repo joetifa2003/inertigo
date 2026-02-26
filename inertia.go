@@ -27,13 +27,13 @@ const (
 
 // inertiaContext holds all accumulated data for a request.
 type inertiaContext struct {
-	shared Props          // Shared props for current request
-	flash  map[string]any // Flash props from previous request (read)
+	shared map[string]prop // Shared props for current request
+	flash  map[string]any  // Flash props from previous request (read)
 }
 
 func newInertiaContext() inertiaContext {
 	return inertiaContext{
-		shared: make(Props),
+		shared: make(map[string]prop),
 		flash:  make(map[string]any),
 	}
 }
@@ -229,13 +229,23 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 
 // Share adds a prop to the request context for the current request.
 // Shared props have lower priority than page props and flash props.
-func Share(r *http.Request, key string, prop Prop) {
-	ShareMultiple(r, Props{key: prop})
+// The value can be any type; special prop types (DeferredProp, LazyProp, etc.)
+// are used directly, while plain values are wrapped internally.
+func Share(r *http.Request, key string, value any) {
+	if ic := getInertiaContext(r); ic != nil {
+		if p, ok := value.(prop); ok {
+			ic.shared[key] = p
+		} else {
+			ic.shared[key] = valueProp{value: value}
+		}
+	}
 }
 
-// ShareMultiple adds multiple shared props to the request context.
-func ShareMultiple(r *http.Request, props Props) {
+// ShareMultiple adds multiple shared props from a struct to the request context.
+// The struct fields are reflected using json tags for key names.
+func ShareMultiple(r *http.Request, propsStruct any) {
 	if ic := getInertiaContext(r); ic != nil {
+		props := structToProps(propsStruct)
 		for k, v := range props {
 			ic.shared[k] = v
 		}
@@ -351,7 +361,7 @@ var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[
 	p.matchPropsOn = p.matchPropsOn[:0]
 }))
 
-func (i *Inertia) processProps(ctx context.Context, props Props, headers *inertiaHeaders) (*processedProps, error) {
+func (i *Inertia) processProps(ctx context.Context, props map[string]prop, headers *inertiaHeaders) (*processedProps, error) {
 	p := processedPropsPool.Get()
 
 	for key, prop := range props {
@@ -486,9 +496,10 @@ func WithClearHistory(clear bool) RenderOption {
 	}
 }
 
-func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, props Props, options ...RenderOption) error {
-	if props == nil {
-		props = Props{}
+func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, propsStruct any, options ...RenderOption) error {
+	pageProps := structToProps(propsStruct)
+	if pageProps == nil {
+		pageProps = make(map[string]prop)
 	}
 
 	config := &renderConfig{}
@@ -498,7 +509,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 
 	ic := getInertiaContext(r)
 
-	mergedProps := make(Props)
+	mergedProps := make(map[string]prop)
 
 	if ic != nil {
 		for k, v := range ic.shared {
@@ -506,7 +517,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 		}
 	}
 
-	for k, v := range props {
+	for k, v := range pageProps {
 		mergedProps[k] = v
 	}
 

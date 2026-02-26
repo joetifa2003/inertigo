@@ -15,6 +15,12 @@ import (
 	"github.com/joetifa2003/inertigo/vite"
 )
 
+type IndexProps struct {
+	Message string                         `json:"message"`
+	Reviews inertia.DeferredProp[[]string] `json:"reviews"`
+	Date    inertia.LazyProp[string]       `json:"date"`
+}
+
 func main() {
 	isDev := flag.Bool("dev", false, "development mode")
 	flag.Parse()
@@ -45,13 +51,13 @@ func main() {
 	mux.Handle(bundler.AssetPrefix(), bundler.Handler())
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err = i.Render(w, r, "index", inertia.Props{
-			"message": inertia.Value("Hello, world!"),
-			"reviews": inertia.Deferred(func(ctx context.Context) (any, error) {
+		err = i.Render(w, r, "index", IndexProps{
+			Message: "Hello, world!",
+			Reviews: inertia.Deferred(func(ctx context.Context) ([]string, error) {
 				time.Sleep(time.Second)
 				return []string{"Great", "Awesome", "Cool"}, nil
 			}),
-			"date": inertia.Lazy(func(ctx context.Context) (any, error) {
+			Date: inertia.Lazy(func(ctx context.Context) (string, error) {
 				return time.Now().String(), nil
 			}),
 		})

@@ -2,23 +2,24 @@ package inertia
 
 import "context"
 
-// alwaysProp is always included in the response, even on partial reloads.
-type alwaysProp struct {
-	value any
+// AlwaysProp is always included in the response, even on partial reloads.
+type AlwaysProp[T any] struct {
+	value T
 }
 
 // Always creates a prop that is always included in the response,
 // even when not explicitly requested in a partial reload.
-func Always(value any) Prop {
-	return alwaysProp{value: value}
+func Always[T any](value T) AlwaysProp[T] {
+	return AlwaysProp[T]{value: value}
 }
 
-func (p alwaysProp) shouldInclude(key string, headers *inertiaHeaders) bool {
+func (p AlwaysProp[T]) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return true
 }
 
-func (p alwaysProp) resolve(ctx context.Context) (any, error) {
+func (p AlwaysProp[T]) resolve(ctx context.Context) (any, error) {
 	return p.value, nil
 }
 
-func (p alwaysProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {}
+func (p AlwaysProp[T]) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+}

@@ -5,25 +5,26 @@ import (
 	"slices"
 )
 
-// deferredProp is excluded on initial load and fetched later via partial reload.
-type deferredProp struct {
-	resolver PropFunc
+// DeferredProp is a prop that is excluded on initial page load.
+// The frontend will automatically request it via a partial reload.
+type DeferredProp[T any] struct {
+	resolver Resolver[T]
 	group    string
 }
 
 // Deferred creates a prop that is excluded on initial page load.
 // The frontend will automatically request it via a partial reload.
-func Deferred(resolver PropFunc) Prop {
-	return deferredProp{resolver: resolver}
+func Deferred[T any](resolver Resolver[T]) DeferredProp[T] {
+	return DeferredProp[T]{resolver: resolver}
 }
 
 // DeferredGroup creates a deferred prop with a specific group.
 // Props in the same group are fetched together in a single partial reload.
-func DeferredGroup(group string, resolver PropFunc) Prop {
-	return deferredProp{resolver: resolver, group: group}
+func DeferredGroup[T any](group string, resolver Resolver[T]) DeferredProp[T] {
+	return DeferredProp[T]{resolver: resolver, group: group}
 }
 
-func (p deferredProp) shouldInclude(key string, headers *inertiaHeaders) bool {
+func (p DeferredProp[T]) shouldInclude(key string, headers *inertiaHeaders) bool {
 	// Only include if explicitly requested in partial reload
 	if headers.IsPartial && len(headers.PartialData) > 0 {
 		return slices.Contains(headers.PartialData, key)
@@ -31,11 +32,11 @@ func (p deferredProp) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return false
 }
 
-func (p deferredProp) resolve(ctx context.Context) (any, error) {
+func (p DeferredProp[T]) resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p deferredProp) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
+func (p DeferredProp[T]) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
 	if headers.IsPartial {
 		return
 	}
