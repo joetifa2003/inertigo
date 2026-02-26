@@ -1,4 +1,4 @@
-package inertia
+package props
 
 import (
 	"context"
@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-// OnceProp is included once and then excluded on subsequent page visits.
-type OnceProp[T any] struct {
+// Once is included once and then excluded on subsequent page visits.
+type Once[T any] struct {
 	resolver  Resolver[T]
 	expiresAt *string
-	fresh     bool   // Force refresh even if client has cached
-	alias     string // Custom key for client-side caching
+	fresh     bool
+	alias     string
 }
 
-// OnceOption configures Once prop behavior
+// OnceOption configures Once prop behavior.
 type OnceOption func(*onceConfig)
 
 type onceConfig struct {
@@ -34,29 +34,27 @@ func FreshWhen(condition bool) OnceOption {
 	return func(c *onceConfig) { c.fresh = condition }
 }
 
-// OnceAs assigns a custom key for client-side caching.
-// This allows sharing data across multiple pages while using different prop names.
-func OnceAs(alias string) OnceOption {
+// As assigns a custom key for client-side caching.
+func As(alias string) OnceOption {
 	return func(c *onceConfig) { c.alias = alias }
 }
 
-// OnceUntil sets an expiration time for the once prop.
-// After expiration, the prop will be resolved again on subsequent visits.
-func OnceUntil(duration time.Duration) OnceOption {
+// Until sets an expiration time for the once prop.
+func Until(duration time.Duration) OnceOption {
 	return func(c *onceConfig) {
 		expiresAt := fmt.Sprintf("%d", time.Now().Add(duration).UnixMilli())
 		c.expiresAt = &expiresAt
 	}
 }
 
-// Once creates a prop that is included on the first visit and then
+// NewOnce creates a prop that is included on the first visit and then
 // excluded on subsequent visits to the same page.
-func Once[T any](resolver Resolver[T], opts ...OnceOption) OnceProp[T] {
+func NewOnce[T any](resolver Resolver[T], opts ...OnceOption) Once[T] {
 	cfg := &onceConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return OnceProp[T]{
+	return Once[T]{
 		resolver:  resolver,
 		expiresAt: cfg.expiresAt,
 		fresh:     cfg.fresh,
@@ -64,12 +62,10 @@ func Once[T any](resolver Resolver[T], opts ...OnceOption) OnceProp[T] {
 	}
 }
 
-func (p OnceProp[T]) shouldInclude(key string, headers *inertiaHeaders) bool {
-	// Always include if fresh is set
+func (p Once[T]) ShouldInclude(key string, headers *Headers) bool {
 	if p.fresh {
 		return true
 	}
-	// Exclude if client already has this prop cached
 	cacheKey := key
 	if p.alias != "" {
 		cacheKey = p.alias
@@ -80,17 +76,17 @@ func (p OnceProp[T]) shouldInclude(key string, headers *inertiaHeaders) bool {
 	return true
 }
 
-func (p OnceProp[T]) resolve(ctx context.Context) (any, error) {
+func (p Once[T]) Resolve(ctx context.Context) (any, error) {
 	return p.resolver(ctx)
 }
 
-func (p OnceProp[T]) modifyProcessedProps(key string, headers *inertiaHeaders, pp *processedProps) {
-	data := oncePropData{Prop: key}
+func (p Once[T]) ModifyProcessedProps(key string, headers *Headers, pp *ProcessedProps) {
+	data := OncePropData{Prop: key}
 	if p.expiresAt != nil {
 		data.ExpiresAt = *p.expiresAt
 	}
 	if p.alias != "" {
 		data.Alias = p.alias
 	}
-	pp.onceProps[key] = data
+	pp.OnceProps[key] = data
 }

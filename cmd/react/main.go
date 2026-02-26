@@ -11,14 +11,14 @@ import (
 	"time"
 
 	inertia "github.com/joetifa2003/inertigo"
+	"github.com/joetifa2003/inertigo/props"
 	"github.com/joetifa2003/inertigo/qjs"
 	"github.com/joetifa2003/inertigo/vite"
 )
 
 type IndexProps struct {
-	Message string                         `json:"message"`
-	Reviews inertia.DeferredProp[[]string] `json:"reviews"`
-	Date    inertia.LazyProp[string]       `json:"date"`
+	Message string                   `json:"message"`
+	Reviews props.Deferred[[]string] `json:"reviews"`
 }
 
 func main() {
@@ -53,12 +53,9 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		err = i.Render(w, r, "index", IndexProps{
 			Message: "Hello, world!",
-			Reviews: inertia.Deferred(func(ctx context.Context) ([]string, error) {
+			Reviews: props.NewDeferred(func(ctx context.Context) ([]string, error) {
 				time.Sleep(time.Second)
 				return []string{"Great", "Awesome", "Cool"}, nil
-			}),
-			Date: inertia.Lazy(func(ctx context.Context) (string, error) {
-				return time.Now().String(), nil
 			}),
 		})
 		if err != nil {

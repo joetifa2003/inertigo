@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/joetifa2003/inertigo/internal/pool"
+	"github.com/joetifa2003/inertigo/props"
 )
 
 type contextKey string
@@ -27,13 +28,13 @@ const (
 
 // inertiaContext holds all accumulated data for a request.
 type inertiaContext struct {
-	shared map[string]prop // Shared props for current request
-	flash  map[string]any  // Flash props from previous request (read)
+	shared map[string]props.Prop // Shared props for current request
+	flash  map[string]any        // Flash props from previous request (read)
 }
 
 func newInertiaContext() inertiaContext {
 	return inertiaContext{
-		shared: make(map[string]prop),
+		shared: make(map[string]props.Prop),
 		flash:  make(map[string]any),
 	}
 }
@@ -229,14 +230,14 @@ func New(b Bundler, options ...InertiaOption) (*Inertia, error) {
 
 // Share adds a prop to the request context for the current request.
 // Shared props have lower priority than page props and flash props.
-// The value can be any type; special prop types (DeferredProp, LazyProp, etc.)
+// The value can be any type; special prop types (props.Deferred, props.Lazy, etc.)
 // are used directly, while plain values are wrapped internally.
 func Share(r *http.Request, key string, value any) {
 	if ic := getInertiaContext(r); ic != nil {
-		if p, ok := value.(prop); ok {
+		if p, ok := value.(props.Prop); ok {
 			ic.shared[key] = p
 		} else {
-			ic.shared[key] = valueProp{value: value}
+			ic.shared[key] = props.Value[any]{Val: value}
 		}
 	}
 }
@@ -245,8 +246,8 @@ func Share(r *http.Request, key string, value any) {
 // The struct fields are reflected using json tags for key names.
 func ShareMultiple(r *http.Request, propsStruct any) {
 	if ic := getInertiaContext(r); ic != nil {
-		props := structToProps(propsStruct)
-		for k, v := range props {
+		propMap := props.StructToProps(propsStruct)
+		for k, v := range propMap {
 			ic.shared[k] = v
 		}
 	}
@@ -330,50 +331,34 @@ func (i *Inertia) Logger() Logger {
 	return i.logger
 }
 
-type processedProps struct {
-	finalProps     map[string]any
-	deferredProps  map[string][]string
-	onceProps      map[string]oncePropData
-	scrollProps    map[string]scrollPropMetadata
-	mergeProps     []string // Prop paths to append on navigation
-	prependProps   []string // Prop paths to prepend on navigation
-	deepMergeProps []string // Prop paths to deep merge on navigation
-	matchPropsOn   []string // Field paths for matching when merging
-}
-
-func newProcessedProps() *processedProps {
-	return &processedProps{
-		finalProps:    make(map[string]any),
-		deferredProps: make(map[string][]string),
-		onceProps:     make(map[string]oncePropData),
-		scrollProps:   make(map[string]scrollPropMetadata),
-	}
-}
-
-var processedPropsPool = pool.NewPool(newProcessedProps, pool.WithPoolBeforeGet[*processedProps](func(p *processedProps) {
-	clear(p.finalProps)
-	clear(p.deferredProps)
-	clear(p.onceProps)
-	clear(p.scrollProps)
-	p.mergeProps = p.mergeProps[:0]
-	p.prependProps = p.prependProps[:0]
-	p.deepMergeProps = p.deepMergeProps[:0]
-	p.matchPropsOn = p.matchPropsOn[:0]
+var processedPropsPool = pool.NewPool(props.NewProcessedProps, pool.WithPoolBeforeGet[*props.ProcessedProps](func(p *props.ProcessedProps) {
+	props.ResetProcessedProps(p)
 }))
 
-func (i *Inertia) processProps(ctx context.Context, props map[string]prop, headers *inertiaHeaders) (*processedProps, error) {
+func (i *Inertia) processProps(ctx context.Context, propMap map[string]props.Prop, headers *inertiaHeaders) (*props.ProcessedProps, error) {
 	p := processedPropsPool.Get()
 
-	for key, prop := range props {
-		if prop.shouldInclude(key, headers) {
-			resolved, err := prop.resolve(ctx)
+	propHeaders := &props.Headers{
+		Component:           headers.Component,
+		PartialData:         headers.PartialData,
+		PartialExcept:       headers.PartialExcept,
+		ExceptOnceProps:     headers.ExceptOnceProps,
+		ResetProps:          headers.ResetProps,
+		InfiniteScrollMerge: headers.InfiniteScrollMerge,
+		IsPartial:           headers.IsPartial,
+		IsInertia:           headers.IsInertia,
+	}
+
+	for key, prop := range propMap {
+		if prop.ShouldInclude(key, propHeaders) {
+			resolved, err := prop.Resolve(ctx)
 			if err != nil {
 				return p, err
 			}
-			p.finalProps[key] = resolved
+			p.FinalProps[key] = resolved
 		}
 
-		prop.modifyProcessedProps(key, headers, p)
+		prop.ModifyProcessedProps(key, propHeaders, p)
 	}
 
 	return p, nil
@@ -448,29 +433,20 @@ func (i *Inertia) renderHTML(w http.ResponseWriter, r *http.Request, page *PageO
 // PageObject is the JSON structure sent to the Inertia client.
 // It contains all the data needed to render a page component.
 type PageObject struct {
-	Component      string                        `json:"component"`
-	URL            string                        `json:"url"`
-	Props          map[string]any                `json:"props"`
-	Version        string                        `json:"version"`
-	EncryptHistory bool                          `json:"encryptHistory"`
-	ClearHistory   bool                          `json:"clearHistory"`
-	MergeProps     []string                      `json:"mergeProps"`
-	PrependProps   []string                      `json:"prependProps"`
-	DeepMergeProps []string                      `json:"deepMergeProps"`
-	MatchPropsOn   []string                      `json:"matchPropsOn"`
-	DeferredProps  map[string][]string           `json:"deferredProps"`
-	OnceProps      map[string]oncePropData       `json:"onceProps"`
-	ScrollProps    map[string]scrollPropMetadata `json:"scrollProps,omitempty"`
-	Flash          map[string]any                `json:"flash,omitempty"`
-}
-
-// scrollPropMetadata contains pagination metadata for infinite scrolling.
-type scrollPropMetadata struct {
-	PageName     string `json:"pageName"`
-	PreviousPage any    `json:"previousPage"`
-	NextPage     any    `json:"nextPage"`
-	CurrentPage  any    `json:"currentPage"`
-	Reset        bool   `json:"reset"`
+	Component      string                              `json:"component"`
+	URL            string                              `json:"url"`
+	Props          map[string]any                      `json:"props"`
+	Version        string                              `json:"version"`
+	EncryptHistory bool                                `json:"encryptHistory"`
+	ClearHistory   bool                                `json:"clearHistory"`
+	MergeProps     []string                            `json:"mergeProps"`
+	PrependProps   []string                            `json:"prependProps"`
+	DeepMergeProps []string                            `json:"deepMergeProps"`
+	MatchPropsOn   []string                            `json:"matchPropsOn"`
+	DeferredProps  map[string][]string                 `json:"deferredProps"`
+	OnceProps      map[string]props.OncePropData       `json:"onceProps"`
+	ScrollProps    map[string]props.ScrollPropMetadata `json:"scrollProps,omitempty"`
+	Flash          map[string]any                      `json:"flash,omitempty"`
 }
 
 // renderConfig holds per-render configuration options
@@ -497,9 +473,9 @@ func WithClearHistory(clear bool) RenderOption {
 }
 
 func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component string, propsStruct any, options ...RenderOption) error {
-	pageProps := structToProps(propsStruct)
+	pageProps := props.StructToProps(propsStruct)
 	if pageProps == nil {
-		pageProps = make(map[string]prop)
+		pageProps = make(map[string]props.Prop)
 	}
 
 	config := &renderConfig{}
@@ -509,7 +485,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 
 	ic := getInertiaContext(r)
 
-	mergedProps := make(map[string]prop)
+	mergedProps := make(map[string]props.Prop)
 
 	if ic != nil {
 		for k, v := range ic.shared {
@@ -535,7 +511,7 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 	}
 
 	if flashData != nil {
-		finalErrors := p.finalProps["errors"]
+		finalErrors := p.FinalProps["errors"]
 		switch finalErrors := finalErrors.(type) {
 		case map[string]any:
 
@@ -547,28 +523,28 @@ func (i *Inertia) Render(w http.ResponseWriter, r *http.Request, component strin
 			}
 
 		default:
-			p.finalProps["errors"] = flashData["errors"]
+			p.FinalProps["errors"] = flashData["errors"]
 		}
 	}
 
-	if p.finalProps["errors"] == nil {
-		p.finalProps["errors"] = json.RawMessage("{}")
+	if p.FinalProps["errors"] == nil {
+		p.FinalProps["errors"] = json.RawMessage("{}")
 	}
 
 	pageObject := &PageObject{
 		Component:      component,
 		URL:            r.URL.Path,
-		Props:          p.finalProps,
+		Props:          p.FinalProps,
 		Version:        i.version,
 		EncryptHistory: config.encryptHistory != nil && *config.encryptHistory,
 		ClearHistory:   config.clearHistory != nil && *config.clearHistory,
-		MergeProps:     p.mergeProps,
-		PrependProps:   p.prependProps,
-		DeepMergeProps: p.deepMergeProps,
-		MatchPropsOn:   p.matchPropsOn,
-		DeferredProps:  p.deferredProps,
-		OnceProps:      p.onceProps,
-		ScrollProps:    p.scrollProps,
+		MergeProps:     p.MergeProps,
+		PrependProps:   p.PrependProps,
+		DeepMergeProps: p.DeepMergeProps,
+		MatchPropsOn:   p.MatchPropsOn,
+		DeferredProps:  p.DeferredProps,
+		OnceProps:      p.OnceProps,
+		ScrollProps:    p.ScrollProps,
 		Flash:          flashData,
 	}
 
