@@ -1,0 +1,37 @@
+{
+    "$schema": "https://turborepo.dev/schema.json",
+    "extends": [
+        "//"
+    ],
+    "tasks": {
+        "build": {
+            "outputs": [
+                "bin/prod"
+            ],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "../../**/*.go"
+            ]
+        },
+        "preview": {
+            "dependsOn": [
+                "build"
+            ]
+        },
+        "build:dev": {
+            "outputs": [
+                "bin/dev"
+            ],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "../../**/*.go"
+            ]
+        },
+        "dev": {
+            "dependsOn": [
+                "build:dev"
+            ],
+            "interruptible": true
+        }
+    }
+}

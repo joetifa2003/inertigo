@@ -1,0 +1,9 @@
+{
+    "name": "typegen",
+    "scripts": {
+        "build": "go run ."
+    },
+    "exports": {
+        ".": "./dist/index.ts"
+    }
+}

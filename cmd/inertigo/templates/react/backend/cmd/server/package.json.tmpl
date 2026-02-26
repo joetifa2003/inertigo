@@ -1,0 +1,12 @@
+{
+    "name": "{{ .ProjectScope }}/server",
+    "scripts": {
+        "dev": "./bin/dev -dev",
+        "build:dev": "go build -o ./bin/dev .",
+        "build": "go build -ldflags='-s -w' -o bin/prod .",
+        "preview": "./bin/prod"
+    },
+    "dependencies": {
+        "{{ .ProjectScope }}/frontend": "workspace:*"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "$schema": "https://turborepo.dev/schema.json",
+    "extends": [
+        "//"
+    ],
+    "tasks": {
+        "build": {
+            "outputs": [
+                "dist/"
+            ],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "../../**/*.go"
+            ]
+        }
+    }
+}

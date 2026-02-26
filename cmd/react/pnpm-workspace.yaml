@@ -1,0 +1,4 @@
+packages:
+  - 'backend/cmd/server'
+  - 'backend/cmd/typegen'
+  - 'frontend'

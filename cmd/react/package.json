@@ -1,0 +1,13 @@
+{
+    "name": "inertigo-react",
+    "scripts": {
+        "dev": "turbo dev",
+        "dev:watch": "turbo watch dev",
+        "build": "turbo build",
+        "preview": "turbo preview"
+    },
+    "devDependencies": {
+        "turbo": "^2.8.11"
+    },
+    "packageManager": "pnpm@10.26.0"
+}

@@ -1,0 +1,29 @@
+{
+    "$schema": "https://turborepo.dev/schema.json",
+    "extends": [
+        "//"
+    ],
+    "tasks": {
+        "build": {
+            "outputs": [
+                "bin/prod"
+            ]
+        },
+        "preview": {
+            "dependsOn": [
+                "build"
+            ]
+        },
+        "build:dev": {
+            "outputs": [
+                "bin/dev"
+            ]
+        },
+        "dev": {
+            "dependsOn": [
+                "build:dev"
+            ],
+            "interruptible": true
+        }
+    }
+}

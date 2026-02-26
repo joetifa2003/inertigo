@@ -1,0 +1,13 @@
+import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+import inertigo from "inertigo-vite";
+
+export default defineConfig(({ isSsrBuild }) => ({
+    plugins: [
+        svelte(),
+        inertigo({
+            entryPoint: "./ts/app.ts",
+            ssrEntryPoint: "./ts/ssr.ts",
+        }),
+    ],
+}));

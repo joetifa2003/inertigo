@@ -1,0 +1,16 @@
+<script lang="ts">
+  import type { PageIndex } from "{{ .ProjectScope }}/typegen";
+
+  let { message, reviews }: PageIndex = $props();
+</script>
+
+<div>
+  <div>{message}</div>
+  {#if reviews}
+    {#each reviews as review}
+      <div>{review}</div>
+    {/each}
+  {:else}
+    <div>Loading reviews...</div>
+  {/if}
+</div>

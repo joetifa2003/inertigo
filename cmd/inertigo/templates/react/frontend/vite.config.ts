@@ -1,0 +1,13 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import inertigo from "inertigo-vite";
+
+export default defineConfig(({ isSsrBuild }) => ({
+    plugins: [
+        react(),
+        inertigo({
+            entryPoint: "./ts/app.tsx",
+            ssrEntryPoint: "./ts/ssr.tsx",
+        }),
+    ],
+}));
