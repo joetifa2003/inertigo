@@ -54,8 +54,11 @@ func Generate(projectScope, goPackageName, framework string) error {
 		destPath := filepath.Join(targetDir, relPath)
 
 		// Handle file renaming (remove .tmpl)
-		if strings.HasSuffix(destPath, ".tmpl") {
-			destPath = strings.TrimSuffix(destPath, ".tmpl")
+		destPath = strings.TrimSuffix(destPath, ".tmpl")
+
+		// Convert gitignore back to .gitignore
+		if filepath.Base(destPath) == "gitignore" {
+			destPath = filepath.Join(filepath.Dir(destPath), ".gitignore")
 		}
 
 		if d.IsDir() {
